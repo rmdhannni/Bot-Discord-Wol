@@ -1,0 +1,39 @@
+{
+  "701404903951826964": {
+    "welcome": {
+      "enabled": false,
+      "channelId": "701404904375451731",
+      "title": "👋 Welcome to {server}!",
+      "description": "Hey {user}, welcome aboard! You are member **#{count}**.\nEnjoy your stay and read the rules.",
+      "color": "#5865F2",
+      "imageUrl": "",
+      "footer": "User ID: {userId}"
+    },
+    "goodbye": {
+      "enabled": false,
+      "channelId": "1559224907978506292",
+      "title": "👋 Goodbye from {server}",
+      "description": "**{user}** has left the server. We now have **#{count}** members.",
+      "color": "#ED4245",
+      "imageUrl": "",
+      "footer": "They will be missed."
+    },
+    "boost": {
+      "enabled": true,
+      "channelId": "701404904375451731",
+      "theme": "light",
+      "titleHeader": "{username}",
+      "subtitle": "THANKS BOOSTER SERVER",
+      "backgroundImageUrl": "",
+      "unboostNotify": true
+    },
+    "tempvoice": {
+      "enabled": true,
+      "hubChannelId": "1559228682521022525",
+      "categoryId": "701404904375451729",
+      "voicePanelChannelId": "701404904375451731",
+      "channelNameTemplate": "🎙️ {username}'s Room",
+      "defaultLimit": 0
+    }
+  }
+}
