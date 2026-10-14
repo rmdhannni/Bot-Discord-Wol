@@ -40,15 +40,15 @@ export class WelcomeEmbedBuilder {
     const defaultDesc = type === 'welcome'
       ? 'Hey {user}, welcome aboard! You are member **#{count}**.\nEnjoy your stay and read the rules.'
       : '**{user}** has left the server. We now have **{count}** members.';
-    const defaultFooter = type === 'welcome' ? 'User ID: {userId}' : 'They will be missed.';
+    // const defaultFooter = type === 'welcome' ? 'User ID: {userId}' : 'They will be missed.';
 
-    const rawTitle  = options?.title       || defaultTitle;
-    const rawDesc   = options?.description || defaultDesc;
-    const rawFooter = options?.footer      || defaultFooter;
-    const imageUrl  = options?.imageUrl    || '';
+    const rawTitle = options?.title || defaultTitle;
+    const rawDesc = options?.description || defaultDesc;
+    const rawFooter = options?.footer || defaultFooter;
+    const imageUrl = options?.imageUrl || '';
 
-    const titleResolved  = this.resolve(rawTitle,  map);
-    const descResolved   = this.resolve(rawDesc,   map);
+    const titleResolved = this.resolve(rawTitle, map);
+    const descResolved = this.resolve(rawDesc, map);
     const footerResolved = this.resolve(rawFooter, map);
 
     // Avatar URL member (256px PNG)
@@ -87,19 +87,19 @@ export class WelcomeEmbedBuilder {
   }
 
   buildPlaceholderMap(member) {
-    const guild      = member?.guild;
-    const count      = guild?.memberCount ? guild.memberCount.toString() : '1';
-    const userStr    = typeof member?.toString === 'function' ? member.toString() : (member?.user?.username || 'Member');
-    const username   = member?.user?.username || member?.displayName || 'Member';
+    const guild = member?.guild;
+    const count = guild?.memberCount ? guild.memberCount.toString() : '1';
+    const userStr = typeof member?.toString === 'function' ? member.toString() : (member?.user?.username || 'Member');
+    const username = member?.user?.username || member?.displayName || 'Member';
     const serverName = guild?.name || 'Server';
-    const userId     = member?.user?.id || member?.id || '0';
+    const userId = member?.user?.id || member?.id || '0';
 
     return {
-      '{user}':     userStr,
+      '{user}': userStr,
       '{username}': username,
-      '{server}':   serverName,
-      '{count}':    count,
-      '{userId}':   userId,
+      '{server}': serverName,
+      '{count}': count,
+      '{userId}': userId,
     };
   }
 

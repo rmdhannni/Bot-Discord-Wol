@@ -3,9 +3,9 @@
     "welcome": {
       "enabled": false,
       "channelId": "701404904375451731",
-      "title": "👋 Welcome to {server}!",
+      "title": "SELAMAT DATANG",
       "description": "Hey {user}, welcome aboard! You are member **#{count}**.\nEnjoy your stay and read the rules.",
-      "color": "#5865F2",
+      "color": "#00000",
       "imageUrl": "",
       "footer": "User ID: {userId}"
     },
@@ -21,7 +21,7 @@
     "boost": {
       "enabled": true,
       "channelId": "701404904375451731",
-      "theme": "dark",
+      "theme": "light",
       "titleHeader": "50 SHOP | ID",
       "subtitle": "THANKS BOOSTER SERVER",
       "backgroundImageUrl": "",
@@ -34,7 +34,7 @@
       "voicePanelChannelId": "701404904375451731",
       "channelNameTemplate": "🎙️ {username}'s Room",
       "defaultLimit": 0,
-      "maxRooms": 1
+      "maxRooms": 50
     }
   }
 }
