@@ -50,6 +50,7 @@ export class BoostService {
 
       const currentBoosts = member.guild.premiumSubscriptionCount || 1;
       const { nextTierTarget, nextTierLabel, currentTierLabel } = this.resolveTiers(currentBoosts);
+      const memberName = member.displayName || member.user.username;
 
       const buffer = await this.canvasGenerator.generateBoostCard({
         member,
@@ -59,7 +60,7 @@ export class BoostService {
         currentTierLabel,
         options: {
           theme: settings.boost.theme || 'dark',
-          titleHeader: member.displayName || member.user.username,
+          titleHeader: memberName,
           subtitle: settings.boost.subtitle || 'THANKS FOR BOOSTING!',
           backgroundImageUrl: settings.boost.backgroundImageUrl || '',
         },
@@ -67,14 +68,18 @@ export class BoostService {
 
       const attachment = new AttachmentBuilder(buffer, { name: 'boost-card.png' });
 
+      // Kirim publik — semua member bisa lihat
       await channel.send({
-        content: `🎉 **Terima kasih telah me-boost server!** ${member}`,
+        content:
+          `💖 **${memberName}** baru saja me-boost server! ${member}\n` +
+          `🏆 **Level Server:** \`${currentTierLabel}\` • 🎯 **Boost:** \`${currentBoosts}\` • Menuju: \`${nextTierLabel}\``,
         files: [attachment],
       });
     } catch (error) {
       console.error('[BoostService] Gagal mengirim notifikasi boost:', error);
     }
   }
+
 
   /**
    * Mengirim notifikasi saat booster sudah habis / unboost

@@ -21,19 +21,20 @@
     "boost": {
       "enabled": true,
       "channelId": "701404904375451731",
-      "theme": "light",
-      "titleHeader": "{username}",
+      "theme": "dark",
+      "titleHeader": "50 SHOP | ID",
       "subtitle": "THANKS BOOSTER SERVER",
       "backgroundImageUrl": "",
       "unboostNotify": true
     },
     "tempvoice": {
       "enabled": true,
-      "hubChannelId": "1559228682521022525",
+      "hubChannelId": "701404904375451732",
       "categoryId": "701404904375451729",
       "voicePanelChannelId": "701404904375451731",
       "channelNameTemplate": "🎙️ {username}'s Room",
-      "defaultLimit": 0
+      "defaultLimit": 0,
+      "maxRooms": 1
     }
   }
 }

@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
+import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } from 'discord.js';
 
 /**
  * SetupCommand — Perintah tunggal `/setup` untuk membuka
@@ -19,7 +19,7 @@ export class SetupCommand {
     if (!interaction.guildId || !interaction.guild) {
       await interaction.reply({
         content: '❌ Perintah ini hanya bisa digunakan di dalam server.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -31,7 +31,7 @@ export class SetupCommand {
 
     await interaction.reply({
       ...dashboardPayload,
-      ephemeral: true,
+      flags: [MessageFlags.IsComponentsV2, MessageFlags.Ephemeral],
     });
   }
 }

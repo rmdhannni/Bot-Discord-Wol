@@ -37,6 +37,7 @@ export const DEFAULT_GUILD_SETTINGS = {
     voicePanelChannelId: '',
     channelNameTemplate: "🎙️ {username}'s Room",
     defaultLimit: 0,
+    maxRooms: 0,
   },
 };
 

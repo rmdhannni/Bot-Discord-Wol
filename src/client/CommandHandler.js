@@ -1,4 +1,4 @@
-import { Collection, REST, Routes } from 'discord.js';
+import { Collection, REST, Routes, MessageFlags } from 'discord.js';
 import { CFG_IDS } from '../modules/setup/SetupDashboard.js';
 
 /**
@@ -29,10 +29,11 @@ export class CommandHandler {
       try {
         await command.execute(interaction);
       } catch (error) {
+        if (error.code === 10062 || error.code === 40060) return;
         console.error(`[CommandHandler] Error /${interaction.commandName}:`, error);
         const reply = {
           content: '❌ Terjadi kesalahan saat menjalankan perintah.',
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         };
         if (interaction.replied || interaction.deferred) {
           await interaction.followUp(reply).catch(() => {});
@@ -51,6 +52,7 @@ export class CommandHandler {
       try {
         await this.setupDashboard.handleInteraction(interaction);
       } catch (error) {
+        if (error.code === 10062 || error.code === 40060) return;
         console.error('[CommandHandler] Error handling setup dashboard interaction:', error);
       }
     }

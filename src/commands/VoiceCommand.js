@@ -1,8 +1,8 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder, MessageFlags } from 'discord.js';
 
 /**
  * VoiceCommand — Perintah `/voice` untuk memunculkan kembali
- * panel kontrol temp voice ke channel obrolan pengguna.
+ * panel kontrol temp voice ke text chat dalam voice channel milik user.
  */
 export class VoiceCommand {
   constructor(manager) {
@@ -17,7 +17,7 @@ export class VoiceCommand {
     if (!interaction.guildId || !interaction.guild) {
       await interaction.reply({
         content: '❌ Perintah ini hanya bisa digunakan di dalam server.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -26,16 +26,18 @@ export class VoiceCommand {
     if (!state) {
       await interaction.reply({
         content: '❌ Kamu tidak memiliki room voice aktif saat ini. Masuk ke channel **Join to Create** untuk membuat room.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
 
-    await this.manager.sendPanelToChannel(interaction.channel, state);
+    // Kirim panel ke text chat dalam voice channel milik user (bukan channel tempat ketik)
+    const voiceTextChannel = state.channel.isTextBased ? state.channel : interaction.channel;
+    await this.manager.sendPanelToChannel(voiceTextChannel, state);
 
     await interaction.reply({
-      content: '✅ Panel kontrol room kamu telah dikirim ke channel ini!',
-      ephemeral: true,
+      content: `✅ Panel kontrol room kamu telah dikirim ke <#${voiceTextChannel.id}>!`,
+      flags: MessageFlags.Ephemeral,
     });
   }
 }

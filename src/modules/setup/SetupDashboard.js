@@ -269,7 +269,7 @@ export class SetupDashboard {
       `• Status: ${s.boost.enabled ? '🟢 **Aktif**' : '🔴 **Nonaktif**'}\n` +
       `• Channel Notif: ${fmtCh(s.boost.channelId)}\n` +
       `• Tema Tampilan: **${s.boost.theme.toUpperCase()}** (${s.boost.theme === 'dark' ? 'Dark Grunge - Gbr 2' : 'White Splatter - Gbr 3'})\n` +
-      `• Tag Header: \`${s.boost.titleHeader}\`\n` +
+      `• Tag Header: \`Otomatis (Username Booster)\`\n` +
       `• Subtitle: \`${s.boost.subtitle}\`\n` +
       `• Notif Unboost: ${s.boost.unboostNotify ? '🟢 Aktif' : '🔴 Nonaktif'}`;
 
@@ -344,6 +344,10 @@ export class SetupDashboard {
   buildTempVoiceDashboard(guildId) {
     const s = this.store.get(guildId);
     const fmtCh = (id) => (id ? `<#${id}>` : '`Belum diatur`');
+    const activeRooms = this.tvManager ? this.tvManager.getActiveRoomsCount(guildId) : 0;
+    const maxRoomsText = (s.tempvoice.maxRooms && s.tempvoice.maxRooms > 0)
+      ? `${s.tempvoice.maxRooms} room`
+      : 'Unlimited (Tanpa Batas)';
 
     const content =
       `# 🎙️ Pengaturan Temporary Voice\n\n` +
@@ -354,7 +358,11 @@ export class SetupDashboard {
       `• Kategori Room: ${fmtCh(s.tempvoice.categoryId)}\n` +
       `• Text Channel Panel: ${fmtCh(s.tempvoice.voicePanelChannelId)}\n` +
       `• Template Nama Room: \`${s.tempvoice.channelNameTemplate}\`\n` +
-      `• Default Limit: \`${s.tempvoice.defaultLimit === 0 ? 'Unlimited' : s.tempvoice.defaultLimit}\``;
+      `• Default Member Limit (per room): \`${s.tempvoice.defaultLimit === 0 ? 'Unlimited' : s.tempvoice.defaultLimit}\`\n` +
+      `• Kuota Maksimal Room Server: \`${maxRoomsText}\`\n\n` +
+      `### 📊 Status Realtime\n` +
+      `• Room Terbuat Saat Ini: **${activeRooms}** / ${s.tempvoice.maxRooms > 0 ? s.tempvoice.maxRooms : '∞'} room aktif\n` +
+      `*(Jumlah room otomatis update realtime mengikuti room yang sedang aktif)*`;
 
     const row1 = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
@@ -529,14 +537,6 @@ export class SetupDashboard {
       .addComponents(
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
-            .setCustomId('b_header')
-            .setLabel('Tag Header (contoh: 11DKK)')
-            .setValue(s.boost.titleHeader)
-            .setStyle(TextInputStyle.Short)
-            .setRequired(true),
-        ),
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
             .setCustomId('b_subtitle')
             .setLabel('Subtitle (THANKS BOOSTER SERVER)')
             .setValue(s.boost.subtitle)
@@ -572,8 +572,16 @@ export class SetupDashboard {
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId('tv_def_limit')
-            .setLabel('Default Member Limit (0 = Unlimited)')
+            .setLabel('Default Member Limit / Room (0 = Unlimited)')
             .setValue(String(s.tempvoice.defaultLimit))
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true),
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId('tv_max_rooms')
+            .setLabel('Batas Maksimal Room Server (0 = Unlimited)')
+            .setValue(String(s.tempvoice.maxRooms || 0))
             .setStyle(TextInputStyle.Short)
             .setRequired(true),
         ),
@@ -638,9 +646,8 @@ export class SetupDashboard {
             );
           const container = this.welcomeBuilder.buildWelcomeContainer(interaction.member, s.welcome);
           await interaction.reply({
-            flags: [MessageFlags.IsComponentsV2],
+            flags: [MessageFlags.IsComponentsV2, MessageFlags.Ephemeral],
             components: [previewLabel, container],
-            ephemeral: true,
           });
           return;
         }
@@ -653,9 +660,8 @@ export class SetupDashboard {
             );
           const container = this.welcomeBuilder.buildGoodbyeContainer(interaction.member, s.goodbye);
           await interaction.reply({
-            flags: [MessageFlags.IsComponentsV2],
+            flags: [MessageFlags.IsComponentsV2, MessageFlags.Ephemeral],
             components: [previewLabel, container],
-            ephemeral: true,
           });
           return;
         }
@@ -688,7 +694,7 @@ export class SetupDashboard {
           return;
 
         case CFG_IDS.TEST_BOOST: {
-          await interaction.deferReply({ ephemeral: true });
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
           const s = this.store.get(guildId);
           const currentBoosts = interaction.guild.premiumSubscriptionCount || 3;
           const buffer = await this.boostGenerator.generateBoostCard({
@@ -730,9 +736,8 @@ export class SetupDashboard {
             );
 
           await interaction.reply({
-            flags: [MessageFlags.IsComponentsV2],
+            flags: [MessageFlags.IsComponentsV2, MessageFlags.Ephemeral],
             components: [container],
-            ephemeral: true,
           });
           return;
         }
@@ -756,29 +761,38 @@ export class SetupDashboard {
           const targetChannel = await interaction.guild.channels.fetch(targetChannelId).catch(() => null);
           if (!targetChannel || !targetChannel.isTextBased()) {
             await interaction.followUp({
-              content: '❌ Channel teks tidak valid untuk mengirim panel.',
+              content: '❌ Channel teks tidak valid untuk mengirim panel. Pastikan kamu sudah memilih **Text Channel Panel** di bawah.',
               flags: [MessageFlags.Ephemeral],
             });
             return;
           }
 
-          // Kirim dummy preview / real panel
-          const dummyOwner = interaction.member;
-          const dummyChannel = interaction.member.voice?.channel || {
-            name: `${interaction.user.username}'s Room`,
-            members: { size: 1 },
-            userLimit: 0,
-            guild: interaction.guild,
-          };
+          // Kirim panel setup permanen untuk member
+          const { ContainerBuilder, TextDisplayBuilder, SeparatorBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = await import('discord.js');
+          const setupPanel = new ContainerBuilder()
+            .addTextDisplayComponents(
+              new TextDisplayBuilder().setContent(
+                `# 🎙️ Temporary Voice Control\n\n` +
+                `Selamat datang di sistem **Temporary Voice**!\n` +
+                `Untuk membuat room voice pribadimu, ikuti langkah berikut:\n\n` +
+                `1️⃣ Masuk ke channel **Join to Create** <#${s.tempvoice.hubChannelId || '?'}>\n` +
+                `2️⃣ Room voice pribadimu akan otomatis dibuat\n` +
+                `3️⃣ Gunakan \`/voice\` di dalam room untuk menampilkan panel kontrol\n\n` +
+                `-# Panel kontrol berisi 20+ tombol untuk mengatur nama, limit, privasi, dan lainnya.`,
+              ),
+            )
+            .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
+            .addTextDisplayComponents(
+              new TextDisplayBuilder().setContent(`-# ⚙️ ${interaction.guild.name} • Temp Voice System`),
+            );
 
-          await this.tvManager.controller.sendControlPanel(targetChannel, {
-            owner: dummyOwner,
-            channel: dummyChannel,
-            isLocked: false,
+          await targetChannel.send({
+            flags: [MessageFlags.IsComponentsV2],
+            components: [setupPanel],
           });
 
           await interaction.followUp({
-            content: `✅ Panel kontrol telah dikirim ke <#${targetChannel.id}>!`,
+            content: `✅ Panel setup permanen berhasil dikirim ke <#${targetChannel.id}>! Member bisa membacanya dan langsung join voice.`,
             flags: [MessageFlags.Ephemeral],
           });
           return;
@@ -858,7 +872,7 @@ export class SetupDashboard {
 
           await interaction.reply({
             content: '✅ Pengaturan pesan **Welcome** berhasil disimpan!',
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
           return;
         }
@@ -876,23 +890,22 @@ export class SetupDashboard {
 
           await interaction.reply({
             content: '✅ Pengaturan pesan **Goodbye** berhasil disimpan!',
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
           return;
         }
 
         case CFG_IDS.SUBMIT_BOOST_MODAL: {
-          const titleHeader = interaction.fields.getTextInputValue('b_header');
           const subtitle = interaction.fields.getTextInputValue('b_subtitle');
           const backgroundImageUrl = interaction.fields.getTextInputValue('b_bg');
 
           this.store.set(guildId, {
-            boost: { titleHeader, subtitle, backgroundImageUrl },
+            boost: { subtitle, backgroundImageUrl },
           });
 
           await interaction.reply({
-            content: '✅ Pengaturan teks & banner **Server Booster** berhasil disimpan!',
-            ephemeral: true,
+            content: '✅ Pengaturan teks & banner **Server Booster** berhasil disimpan! Tag header otomatis dari username member yang boost.',
+            flags: MessageFlags.Ephemeral,
           });
           return;
         }
@@ -901,14 +914,16 @@ export class SetupDashboard {
           const channelNameTemplate = interaction.fields.getTextInputValue('tv_name_tpl');
           const rawLimit = interaction.fields.getTextInputValue('tv_def_limit');
           const defaultLimit = parseInt(rawLimit, 10) || 0;
+          const rawMaxRooms = interaction.fields.getTextInputValue('tv_max_rooms');
+          const maxRooms = parseInt(rawMaxRooms, 10) || 0;
 
           this.store.set(guildId, {
-            tempvoice: { channelNameTemplate, defaultLimit },
+            tempvoice: { channelNameTemplate, defaultLimit, maxRooms },
           });
 
           await interaction.reply({
-            content: '✅ Pengaturan nama dan limit **Temp Voice** berhasil disimpan!',
-            ephemeral: true,
+            content: `✅ Pengaturan **Temp Voice** berhasil disimpan!\n• Default Member Limit: **${defaultLimit === 0 ? 'Unlimited' : defaultLimit}**\n• Kuota Maksimal Room: **${maxRooms === 0 ? 'Unlimited' : maxRooms}**`,
+            flags: MessageFlags.Ephemeral,
           });
           return;
         }

@@ -9,8 +9,17 @@ import {
   ContainerBuilder,
   TextDisplayBuilder,
   SeparatorBuilder,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
+  AttachmentBuilder,
   MessageFlags,
 } from 'discord.js';
+import { fileURLToPath } from 'url';
+import { join, dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const TV_GUIDE_PATH = join(__dirname, '../../assets/tv_guide.png');
 
 export const TV_BUTTON_IDS = {
   // Row 1
@@ -58,86 +67,90 @@ export const TV_MODAL_IDS = {
  */
 export class TempVoiceController {
   buildControlRows() {
-    // Row 1: NAME · LIMIT · PRIVACY · WAITING ROOM · CHAT
+    // Row 1: NAMA · LIMIT · PRIVACY · WAITING ROOM · CHAT
     const row1 = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(TV_BUTTON_IDS.NAME).setEmoji('🔀').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(TV_BUTTON_IDS.NAME).setEmoji('🪪').setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId(TV_BUTTON_IDS.LIMIT).setEmoji('👥').setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId(TV_BUTTON_IDS.PRIVACY).setEmoji('🛡️').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId(TV_BUTTON_IDS.WAITING_ROOM).setEmoji('⏱️').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(TV_BUTTON_IDS.WAITING_ROOM).setEmoji('⏳').setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId(TV_BUTTON_IDS.CHAT).setEmoji('💬').setStyle(ButtonStyle.Secondary),
     );
 
     // Row 2: TRUST · UNTRUST · INVITE · KICK · REGION
     const row2 = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(TV_BUTTON_IDS.TRUST).setEmoji('👤').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(TV_BUTTON_IDS.TRUST).setEmoji('➕').setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId(TV_BUTTON_IDS.UNTRUST).setEmoji('🚫').setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId(TV_BUTTON_IDS.INVITE).setEmoji('📞').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId(TV_BUTTON_IDS.KICK).setEmoji('👢').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(TV_BUTTON_IDS.KICK).setEmoji('⛔').setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId(TV_BUTTON_IDS.REGION).setEmoji('🌐').setStyle(ButtonStyle.Secondary),
     );
 
     // Row 3: BLOCK · UNBLOCK · CLAIM · TRANSFER · DELETE
     const row3 = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(TV_BUTTON_IDS.BLOCK).setEmoji('⛔').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId(TV_BUTTON_IDS.UNBLOCK).setEmoji('🔓').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(TV_BUTTON_IDS.BLOCK).setEmoji('❌').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(TV_BUTTON_IDS.UNBLOCK).setEmoji('⭕').setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId(TV_BUTTON_IDS.CLAIM).setEmoji('👑').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId(TV_BUTTON_IDS.TRANSFER).setEmoji('🔁').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(TV_BUTTON_IDS.TRANSFER).setEmoji('🔄').setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId(TV_BUTTON_IDS.DELETE).setEmoji('🗑️').setStyle(ButtonStyle.Danger),
     );
 
-    // Row 4: LOCK · ACTIVITY · STATS · TOPIC · NOTIFY
+    // Row 4: LOCK · ACTIVITY · BITRATE/STATS · NOTIFY (4 tombol persis screenshot)
     const row4 = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(TV_BUTTON_IDS.LOCK).setEmoji('🔐').setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId(TV_BUTTON_IDS.ACTIVITY).setEmoji('🎮').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId(TV_BUTTON_IDS.STATS).setEmoji('📊').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId(TV_BUTTON_IDS.TOPIC).setEmoji('📝').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(TV_BUTTON_IDS.STATS).setEmoji('📶').setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId(TV_BUTTON_IDS.NOTIFY).setEmoji('🔔').setStyle(ButtonStyle.Secondary),
     );
 
     return [row1, row2, row3, row4];
   }
 
+  buildGuideAttachment() {
+    return new AttachmentBuilder(TV_GUIDE_PATH, { name: 'tv_guide.png' });
+  }
+
   buildPanelContainer(owner, channel, isLocked = false) {
     const guildName = channel.guild?.name || 'Server';
-    const memberCount = channel.members?.size || 1;
-    const limitText = channel.userLimit === 0 ? 'Unlimited' : `${channel.userLimit}`;
-    const statusText = isLocked ? 'Locked 🔒' : 'Unlocked 🔓';
 
     const headerText =
-      `# 50 Shop | ID\n\n` +
-      `\`\`\`text\n` +
-      `🔀 NAME      👥 LIMIT     🛡️ PRIVACY   ⏱️ WAIT      💬 CHAT\n` +
-      `👤 TRUST     🚫 UNTRUST   📞 INVITE    👢 KICK      🌐 REGION\n` +
-      `⛔ BLOCK     🔓 UNBLOCK   👑 CLAIM     🔁 TRANSFER  🗑️ DELETE\n` +
-      `\`\`\`\n` +
-      `### 50 Shop Tempvoice Interface\n\n` +
-      `This **interface** can be used to manage your temporary voice channels in **${guildName}**. ` +
-      `More options are available with **/voice** commands.\n` +
-      `Type \`control panel\` or \`kontrol panel\` to bring back your voice panel.\n\n` +
-      `👑 **Owner:** ${owner} | 📊 **Members:** \`${memberCount}/${limitText}\` | 🔒 **Status:** \`${statusText}\``;
+      `### 🔊 ${guildName} — Tempvoice\n\n` +
+      `Gunakan tombol di bawah untuk mengatur **voice channel** kamu.\n` +
+      `-# 📌 Ketik \`control panel\` untuk memunculkan panel ini kembali. ` +
+      `-# ✨ Perintah lengkap tersedia via **/voice**`;
 
     const rows = this.buildControlRows();
 
-    // Clean Container V2 tanpa warna (clean look)
+    // Gambar panduan di paling atas, lalu header, lalu tombol
     const container = new ContainerBuilder()
+      .addMediaGalleryComponents(
+        new MediaGalleryBuilder().addItems(
+          new MediaGalleryItemBuilder().setURL('attachment://tv_guide.png'),
+        ),
+      )
+      .addSeparatorComponents(
+        new SeparatorBuilder().setDivider(true),
+      )
       .addTextDisplayComponents(
         new TextDisplayBuilder().setContent(headerText),
       )
       .addSeparatorComponents(
         new SeparatorBuilder().setDivider(true),
       )
-      .addActionRowComponents(...rows)
-      .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent('-# ⚙️ Use the button below to settings your voice.'),
-      );
+      .addActionRowComponents(...rows);
 
     return container;
   }
 
+  buildPanelContainers(owner, channel, isLocked = false) {
+    return [this.buildPanelContainer(owner, channel, isLocked)];
+  }
+
   async sendControlPanel(textChannel, state) {
     const container = this.buildPanelContainer(state.owner, state.channel, state.isLocked);
+    const attachment = this.buildGuideAttachment();
     return await textChannel.send({
       flags: [MessageFlags.IsComponentsV2],
+      files: [attachment],
       components: [container],
     });
   }
@@ -148,6 +161,7 @@ export class TempVoiceController {
       const msg = await state.controlPanelChannel.messages.fetch(state.controlPanelMessageId);
       if (msg) {
         const container = this.buildPanelContainer(state.owner, state.channel, state.isLocked);
+        // Gambar tidak perlu di-re-upload saat edit karena sudah ada di message
         await msg.edit({
           flags: [MessageFlags.IsComponentsV2],
           components: [container],
@@ -199,14 +213,16 @@ export class TempVoiceController {
   }
 
   async showUserTargetModal(interaction, modalId, title, label) {
+    const safeTitle = (title || 'Form').slice(0, 45);
+    const safeLabel = (label || 'Input').slice(0, 45);
     const modal = new ModalBuilder()
       .setCustomId(modalId)
-      .setTitle(title)
+      .setTitle(safeTitle)
       .addComponents(
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId('target_user')
-            .setLabel(label)
+            .setLabel(safeLabel)
             .setStyle(TextInputStyle.Short)
             .setPlaceholder('Ketik User ID atau @username')
             .setMinLength(2)
@@ -250,7 +266,7 @@ export class TempVoiceController {
     if (!isOwner) {
       await interaction.reply({
         content: '⛔ Hanya **Room Owner** yang dapat mengatur voice channel ini.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -290,7 +306,7 @@ export class TempVoiceController {
           interaction,
           TV_MODAL_IDS.UNTRUST,
           '🚫 Untrust User',
-          'User ID atau @mention untuk hapus trust',
+          'User ID atau @mention untuk untrust',
         );
         break;
 
@@ -299,7 +315,7 @@ export class TempVoiceController {
           interaction,
           TV_MODAL_IDS.INVITE,
           '📞 Invite User',
-          'User ID atau @mention yang ingin diundang',
+          'User ID atau @mention untuk diundang',
         );
         break;
 
@@ -308,7 +324,7 @@ export class TempVoiceController {
           interaction,
           TV_MODAL_IDS.KICK,
           '👢 Kick User',
-          'User ID atau @mention yang ingin dikeluarkan',
+          'User ID atau @mention untuk di-kick',
         );
         break;
 
@@ -321,7 +337,7 @@ export class TempVoiceController {
           interaction,
           TV_MODAL_IDS.BLOCK,
           '⛔ Block User',
-          'User ID atau @mention yang ingin diblokir',
+          'User ID atau @mention untuk diblokir',
         );
         break;
 
@@ -330,7 +346,7 @@ export class TempVoiceController {
           interaction,
           TV_MODAL_IDS.UNBLOCK,
           '🔓 Unblock User',
-          'User ID atau @mention yang ingin dibuka blokirnya',
+          'User ID atau @mention untuk unblock',
         );
         break;
 
@@ -339,7 +355,7 @@ export class TempVoiceController {
           interaction,
           TV_MODAL_IDS.TRANSFER,
           '🔁 Transfer Ownership',
-          'User ID atau @mention calon owner baru',
+          'User ID atau @mention calon owner',
         );
         break;
 
@@ -368,7 +384,7 @@ export class TempVoiceController {
         break;
 
       default:
-        await interaction.reply({ content: '❓ Aksi belum tersedia.', ephemeral: true });
+        await interaction.reply({ content: '❓ Aksi belum tersedia.', flags: MessageFlags.Ephemeral });
     }
   }
 
@@ -383,7 +399,7 @@ export class TempVoiceController {
     await this.refreshPanel(state);
     await interaction.reply({
       content: isLocked ? '🔒 Voice room sekarang **Terkunci** (hanya member diizinkan yang bisa masuk).' : '🔓 Voice room sekarang **Terbuka** untuk semua.',
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -395,7 +411,7 @@ export class TempVoiceController {
     state.isHidden = isHidden;
     await interaction.reply({
       content: isHidden ? '🛡️ Voice room sekarang **Tersembunyi** (Hidden).' : '🛡️ Voice room sekarang **Terlihat** untuk semua.',
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -408,7 +424,7 @@ export class TempVoiceController {
     state.isWaitingRoom = isWaiting;
     await interaction.reply({
       content: isWaiting ? '⏱️ **Waiting Room Aktif**: Member bisa melihat room tapi harus menunggu diizinkan masuk.' : '✅ Waiting Room dinonaktifkan.',
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -416,7 +432,7 @@ export class TempVoiceController {
     // Memberikan info tentang chatroom voice
     await interaction.reply({
       content: `💬 **Voice Chat**: Kamu bisa mengobrol di channel teks terintegrasi langsung dengan mengklik nama voice channel <#${state.channel.id}>!`,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -425,10 +441,10 @@ export class TempVoiceController {
       await state.channel.setRTCRegion(null);
       await interaction.reply({
         content: '🌐 RTC Region telah direset ke **Otomatis (Automatic)** untuk latensi optimal.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     } catch {
-      await interaction.reply({ content: '❌ Gagal mengubah region.', ephemeral: true });
+      await interaction.reply({ content: '❌ Gagal mengubah region.', flags: MessageFlags.Ephemeral });
     }
   }
 
@@ -439,7 +455,7 @@ export class TempVoiceController {
     if (isOwnerInRoom) {
       await interaction.reply({
         content: `⛔ Owner saat ini (${state.owner}) masih berada di dalam room. Kamu tidak bisa mengklaim kepemilikan.`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -447,7 +463,7 @@ export class TempVoiceController {
     if (!state.channel.members.has(member.id)) {
       await interaction.reply({
         content: '⛔ Kamu harus berada di dalam voice room untuk mengklaim kepemilikan.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -456,14 +472,13 @@ export class TempVoiceController {
     await this.refreshPanel(state);
     await interaction.reply({
       content: `👑 Selamat! Kamu (${member}) sekarang adalah **Owner** dari room ini!`,
-      ephemeral: false,
     });
   }
 
   async deleteRoom(interaction, state, manager) {
     await interaction.reply({
       content: '🗑️ Menghapus voice room...',
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     await manager.cleanupTempChannel(state.channel.id, state);
   }
@@ -482,9 +497,8 @@ export class TempVoiceController {
       );
 
     await interaction.reply({
-      flags: [MessageFlags.IsComponentsV2],
+      flags: [MessageFlags.IsComponentsV2, MessageFlags.Ephemeral],
       components: [container],
-      ephemeral: true,
     });
   }
 
@@ -503,9 +517,8 @@ export class TempVoiceController {
       );
 
     await interaction.reply({
-      flags: [MessageFlags.IsComponentsV2],
+      flags: [MessageFlags.IsComponentsV2, MessageFlags.Ephemeral],
       components: [container],
-      ephemeral: true,
     });
   }
 
@@ -520,7 +533,7 @@ export class TempVoiceController {
   async handleModal(interaction, state) {
     const member = interaction.member;
     if (member.id !== state.owner.id) {
-      await interaction.reply({ content: '⛔ Hanya owner yang bisa mengubah pengaturan.', ephemeral: true });
+      await interaction.reply({ content: '⛔ Hanya owner yang bisa mengubah pengaturan.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -529,7 +542,7 @@ export class TempVoiceController {
         const newName = interaction.fields.getTextInputValue('room_name').trim();
         await state.channel.setName(newName);
         await this.refreshPanel(state);
-        await interaction.reply({ content: `✅ Nama room berhasil diubah menjadi: **${newName}**`, ephemeral: true });
+        await interaction.reply({ content: `✅ Nama room berhasil diubah menjadi: **${newName}**`, flags: MessageFlags.Ephemeral });
         break;
       }
 
@@ -537,14 +550,14 @@ export class TempVoiceController {
         const rawLimit = interaction.fields.getTextInputValue('user_limit').trim();
         const limit = parseInt(rawLimit, 10);
         if (isNaN(limit) || limit < 0 || limit > 99) {
-          await interaction.reply({ content: '❌ Limit harus berupa angka antara 0 dan 99.', ephemeral: true });
+          await interaction.reply({ content: '❌ Limit harus berupa angka antara 0 dan 99.', flags: MessageFlags.Ephemeral });
           return;
         }
         await state.channel.setUserLimit(limit);
         await this.refreshPanel(state);
         await interaction.reply({
           content: `✅ Limit room diatur ke: **${limit === 0 ? 'Unlimited' : limit} member**`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
         break;
       }
@@ -553,14 +566,14 @@ export class TempVoiceController {
         const targetInput = interaction.fields.getTextInputValue('target_user').trim();
         const targetMember = await this.resolveMember(interaction.guild, targetInput);
         if (!targetMember) {
-          await interaction.reply({ content: '❌ User tidak ditemukan.', ephemeral: true });
+          await interaction.reply({ content: '❌ User tidak ditemukan.', flags: MessageFlags.Ephemeral });
           return;
         }
         await state.channel.permissionOverwrites.edit(targetMember, {
           Connect: true,
           ViewChannel: true,
         });
-        await interaction.reply({ content: `✅ ${targetMember} sekarang di-trust dan dapat bergabung ke room kapan saja.`, ephemeral: true });
+        await interaction.reply({ content: `✅ ${targetMember} sekarang di-trust dan dapat bergabung ke room kapan saja.`, flags: MessageFlags.Ephemeral });
         break;
       }
 
@@ -568,11 +581,11 @@ export class TempVoiceController {
         const targetInput = interaction.fields.getTextInputValue('target_user').trim();
         const targetMember = await this.resolveMember(interaction.guild, targetInput);
         if (!targetMember) {
-          await interaction.reply({ content: '❌ User tidak ditemukan.', ephemeral: true });
+          await interaction.reply({ content: '❌ User tidak ditemukan.', flags: MessageFlags.Ephemeral });
           return;
         }
         await state.channel.permissionOverwrites.delete(targetMember);
-        await interaction.reply({ content: `✅ Trust untuk ${targetMember} telah dicabut.`, ephemeral: true });
+        await interaction.reply({ content: `✅ Trust untuk ${targetMember} telah dicabut.`, flags: MessageFlags.Ephemeral });
         break;
       }
 
@@ -580,7 +593,7 @@ export class TempVoiceController {
         const targetInput = interaction.fields.getTextInputValue('target_user').trim();
         const targetMember = await this.resolveMember(interaction.guild, targetInput);
         if (!targetMember) {
-          await interaction.reply({ content: '❌ User tidak ditemukan.', ephemeral: true });
+          await interaction.reply({ content: '❌ User tidak ditemukan.', flags: MessageFlags.Ephemeral });
           return;
         }
         await state.channel.permissionOverwrites.edit(targetMember, {
@@ -592,7 +605,7 @@ export class TempVoiceController {
         } catch {
           // Gagal DM bukan fatal
         }
-        await interaction.reply({ content: `✅ Undangan berhasil dikirim ke ${targetMember}.`, ephemeral: true });
+        await interaction.reply({ content: `✅ Undangan berhasil dikirim ke ${targetMember}.`, flags: MessageFlags.Ephemeral });
         break;
       }
 
@@ -600,14 +613,14 @@ export class TempVoiceController {
         const targetInput = interaction.fields.getTextInputValue('target_user').trim();
         const targetMember = await this.resolveMember(interaction.guild, targetInput);
         if (!targetMember) {
-          await interaction.reply({ content: '❌ User tidak ditemukan.', ephemeral: true });
+          await interaction.reply({ content: '❌ User tidak ditemukan.', flags: MessageFlags.Ephemeral });
           return;
         }
         if (targetMember.voice?.channelId === state.channel.id) {
           await targetMember.voice.disconnect('Dikeluarkan oleh owner temp voice.');
         }
         await state.channel.permissionOverwrites.edit(targetMember, { Connect: false });
-        await interaction.reply({ content: `👢 ${targetMember} telah dikeluarkan dari voice room.`, ephemeral: true });
+        await interaction.reply({ content: `👢 ${targetMember} telah dikeluarkan dari voice room.`, flags: MessageFlags.Ephemeral });
         break;
       }
 
@@ -615,7 +628,7 @@ export class TempVoiceController {
         const targetInput = interaction.fields.getTextInputValue('target_user').trim();
         const targetMember = await this.resolveMember(interaction.guild, targetInput);
         if (!targetMember) {
-          await interaction.reply({ content: '❌ User tidak ditemukan.', ephemeral: true });
+          await interaction.reply({ content: '❌ User tidak ditemukan.', flags: MessageFlags.Ephemeral });
           return;
         }
         if (targetMember.voice?.channelId === state.channel.id) {
@@ -625,7 +638,7 @@ export class TempVoiceController {
           Connect: false,
           ViewChannel: false,
         });
-        await interaction.reply({ content: `⛔ ${targetMember} telah diblokir dari room ini.`, ephemeral: true });
+        await interaction.reply({ content: `⛔ ${targetMember} telah diblokir dari room ini.`, flags: MessageFlags.Ephemeral });
         break;
       }
 
@@ -633,11 +646,11 @@ export class TempVoiceController {
         const targetInput = interaction.fields.getTextInputValue('target_user').trim();
         const targetMember = await this.resolveMember(interaction.guild, targetInput);
         if (!targetMember) {
-          await interaction.reply({ content: '❌ User tidak ditemukan.', ephemeral: true });
+          await interaction.reply({ content: '❌ User tidak ditemukan.', flags: MessageFlags.Ephemeral });
           return;
         }
         await state.channel.permissionOverwrites.delete(targetMember);
-        await interaction.reply({ content: `🔓 Blokir terhadap ${targetMember} telah dibuka.`, ephemeral: true });
+        await interaction.reply({ content: `🔓 Blokir terhadap ${targetMember} telah dibuka.`, flags: MessageFlags.Ephemeral });
         break;
       }
 
@@ -645,12 +658,12 @@ export class TempVoiceController {
         const targetInput = interaction.fields.getTextInputValue('target_user').trim();
         const targetMember = await this.resolveMember(interaction.guild, targetInput);
         if (!targetMember) {
-          await interaction.reply({ content: '❌ User tidak ditemukan.', ephemeral: true });
+          await interaction.reply({ content: '❌ User tidak ditemukan.', flags: MessageFlags.Ephemeral });
           return;
         }
         state.owner = targetMember;
         await this.refreshPanel(state);
-        await interaction.reply({ content: `👑 Kepemilikan room berhasil dialihkan ke ${targetMember}!`, ephemeral: false });
+        await interaction.reply({ content: `👑 Kepemilikan room berhasil dialihkan ke ${targetMember}!` });
         break;
       }
 
@@ -658,7 +671,6 @@ export class TempVoiceController {
         const topic = interaction.fields.getTextInputValue('room_topic').trim();
         await interaction.reply({
           content: `📝 **Topik Room Diperbarui:**\n> ${topic}`,
-          ephemeral: false,
         });
         break;
       }
