@@ -1,30 +1,125 @@
 {
   "701404903951826964": {
     "welcome": {
-      "enabled": false,
-      "channelId": "701404904375451731",
-      "title": "SELAMAT DATANG",
-      "description": "Hey {user}, welcome aboard! You are member **#{count}**.\nEnjoy your stay and read the rules.",
-      "color": "#00000",
-      "imageUrl": "",
-      "footer": "User ID: {userId}"
+      "enabled": true,
+      "channelId": "1559224878048215152",
+      "title": "JEMBOT",
+      "layout": [
+        {
+          "type": "header",
+          "content": "JEMBOT"
+        },
+        {
+          "type": "text",
+          "content": "TEMPEKKK"
+        },
+        {
+          "type": "separator"
+        },
+        {
+          "type": "footer",
+          "content": "KONTOL"
+        },
+        {
+          "type": "header",
+          "content": "mpekk"
+        },
+        {
+          "type": "footer",
+          "content": "mpekk"
+        }
+      ],
+      "description": "TEMPEKKK",
+      "color": "#5865f2",
+      "imageUrl": "https://cdn.discordapp.com/attachments/701404904375451731/1560254292089241650/Screenshot_2026-10-15-18-33-25-636_com.discord.jpg?ex=6ad20b8b&is=6ad0ba0b&hm=309dfd0dab9aa87907f24c1ac270bca1c92604e7caa110514e80b89da6922fb2&",
+      "footer": "KONTOL",
+      "editHistory": [
+        {
+          "editedAt": "2026-10-15T11:42:36.093Z",
+          "editedBy": "258508538983219201",
+          "snapshot": {
+            "layout": [
+              {
+                "type": "header",
+                "content": "JEMBOT"
+              },
+              {
+                "type": "text",
+                "content": "TEMPEKKK"
+              },
+              {
+                "type": "separator"
+              },
+              {
+                "type": "footer",
+                "content": "KONTOL"
+              },
+              {
+                "type": "header",
+                "content": "mpekk"
+              },
+              {
+                "type": "footer",
+                "content": "mpekk"
+              }
+            ],
+            "color": "#5865f2",
+            "imageUrl": "https://cdn.discordapp.com/attachments/701404904375451731/1560254292089241650/Screenshot_2026-10-15-18-33-25-636_com.discord.jpg?ex=6ad20b8b&is=6ad0ba0b&hm=309dfd0dab9aa87907f24c1ac270bca1c92604e7caa110514e80b89da6922fb2&"
+          }
+        },
+        {
+          "editedAt": "2026-10-15T11:31:05.485Z",
+          "editedBy": "258508538983219201",
+          "snapshot": {
+            "layout": [
+              {
+                "type": "header",
+                "content": "JEMBOT"
+              },
+              {
+                "type": "text",
+                "content": "TEMPEKKK"
+              },
+              {
+                "type": "separator"
+              },
+              {
+                "type": "footer",
+                "content": "KONTOL"
+              },
+              {
+                "type": "header",
+                "content": "mpekk"
+              },
+              {
+                "type": "footer",
+                "content": "mpekk"
+              }
+            ],
+            "color": "#5865f2",
+            "imageUrl": ""
+          }
+        }
+      ]
     },
     "goodbye": {
-      "enabled": false,
+      "enabled": true,
       "channelId": "1559224907978506292",
       "title": "👋 Goodbye from {server}",
+      "layout": [],
       "description": "**{user}** has left the server. We now have **#{count}** members.",
       "color": "#ED4245",
       "imageUrl": "",
-      "footer": "They will be missed."
+      "footer": "They will be missed.",
+      "editHistory": []
     },
     "boost": {
       "enabled": true,
       "channelId": "701404904375451731",
-      "theme": "light",
-      "titleHeader": "50 SHOP | ID",
+      "theme": "dark",
+      "titleHeader": "hai",
       "subtitle": "THANKS BOOSTER SERVER",
-      "backgroundImageUrl": "",
+      "backgroundImageUrl": "https://cdn.discordapp.com/attachments/1460416360554172416/1494295188406009906/image.png?ex=6ad15e97&is=6ad00d17&hm=d9eac34638f32ba524ca95b850daa6360c9e891eeccc10edb7f7910d4fca9836&",
       "unboostNotify": true
     },
     "tempvoice": {
@@ -32,9 +127,90 @@
       "hubChannelId": "701404904375451732",
       "categoryId": "701404904375451729",
       "voicePanelChannelId": "701404904375451731",
+      "panelColor": "#000000",
+      "setupPanelLayout": [
+        {
+          "type": "header",
+          "content": "🎙️ Temporary Voice Control"
+        },
+        {
+          "type": "text",
+          "content": "Selamat datang di sistem **Temporary Voice**!"
+        },
+        {
+          "type": "text",
+          "content": "Untuk membuat room voice pribadimu, ikuti langkah berikut:"
+        },
+        {
+          "type": "text",
+          "content": "1️⃣ Masuk ke channel **Join to Create** {hubChannel}"
+        },
+        {
+          "type": "text",
+          "content": "2️⃣ Room voice pribadimu akan otomatis dibuat"
+        },
+        {
+          "type": "text",
+          "content": "3️⃣ Gunakan `/voice` di dalam room untuk menampilkan panel kontrol"
+        },
+        {
+          "type": "separator"
+        },
+        {
+          "type": "footer",
+          "content": "Panel kontrol berisi 20+ tombol untuk mengatur nama, limit, privasi, dan lainnya.\n⚙️ {server} • Temp Voice System"
+        }
+      ],
+      "setupPanelColor": "#5865F2",
+      "setupPanelHistory": [
+        {
+          "editedAt": "2026-10-15T11:49:17.454Z",
+          "editedBy": "258508538983219201",
+          "snapshot": {
+            "setupPanelLayout": [
+              {
+                "type": "header",
+                "content": "🎙️ Temporary Voice Control"
+              },
+              {
+                "type": "text",
+                "content": "Selamat datang di sistem **Temporary Voice**!"
+              },
+              {
+                "type": "text",
+                "content": "Untuk membuat room voice pribadimu, ikuti langkah berikut:"
+              },
+              {
+                "type": "text",
+                "content": "1️⃣ Masuk ke channel **Join to Create** {hubChannel}"
+              },
+              {
+                "type": "text",
+                "content": "2️⃣ Room voice pribadimu akan otomatis dibuat"
+              },
+              {
+                "type": "text",
+                "content": "3️⃣ Gunakan `/voice` di dalam room untuk menampilkan panel kontrol"
+              },
+              {
+                "type": "separator"
+              },
+              {
+                "type": "footer",
+                "content": "Panel kontrol berisi 20+ tombol untuk mengatur nama, limit, privasi, dan lainnya.\n⚙️ {server} • Temp Voice System"
+              }
+            ],
+            "setupPanelColor": "#5865F2"
+          }
+        }
+      ],
+      "ownerChannelNames": {
+        "258508538983219201": "TEMPEKK"
+      },
       "channelNameTemplate": "🎙️ {username}'s Room",
       "defaultLimit": 0,
-      "maxRooms": 50
+      "maxRooms": 50,
+      "panelLayout": []
     }
   }
 }

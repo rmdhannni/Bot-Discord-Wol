@@ -25,7 +25,9 @@ export class BoostCanvasGenerator {
     const ctx = canvas.getContext('2d');
 
     const theme = options.theme || 'dark'; // 'dark' (Gambar 2) | 'light' (Gambar 3)
-    const titleHeader = options.titleHeader || '11DKK';
+    const titleHeader = (options.titleHeader || '{username}')
+      .replaceAll('{username}', member.displayName || member.user.username)
+      .replaceAll('{server}', member.guild.name);
     const subtitle = options.subtitle || 'THANKS BOOSTER SERVER';
     const bgUrl = options.backgroundImageUrl || '';
 

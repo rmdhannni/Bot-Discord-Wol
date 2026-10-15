@@ -31,6 +31,8 @@ export const CFG_IDS = {
   MODAL_GOODBYE: 'cfg_modal_goodbye',
   TEST_WELCOME: 'cfg_test_welcome',
   TEST_GOODBYE: 'cfg_test_goodbye',
+  HISTORY_WELCOME: 'cfg_history_welcome',
+  HISTORY_GOODBYE: 'cfg_history_goodbye',
   SELECT_WELCOME_CH: 'cfg_sel_welcome_ch',
   SELECT_GOODBYE_CH: 'cfg_sel_goodbye_ch',
 
@@ -50,6 +52,8 @@ export const CFG_IDS = {
   SELECT_TV_HUB: 'cfg_sel_tv_hub',
   SELECT_TV_CAT: 'cfg_sel_tv_cat',
   SELECT_TV_PANEL: 'cfg_sel_tv_panel',
+  EDIT_TV_SETUP_LAYOUT: 'cfg_modal_tempvoice_setup_layout',
+  HISTORY_TV_SETUP: 'cfg_history_tempvoice_setup',
 
   // Modal IDs
   SUBMIT_WELCOME_MODAL: 'cfg_sub_welcome_modal',
@@ -67,6 +71,360 @@ export class SetupDashboard {
     this.boostGenerator = boostGenerator;
     this.welcomeBuilder = welcomeBuilder;
     this.tvManager = tvManager;
+    this.layoutDrafts = new Map();
+  }
+
+  getMessageLayoutElements(settings) {
+    if (Array.isArray(settings.layout) && settings.layout.length) {
+      return settings.layout.map((element) => ({ ...element }));
+    }
+    if (typeof settings.layout === 'string' && settings.layout.trim()) {
+      return this.welcomeBuilder.parseLayout(settings.layout);
+    }
+
+    const lines = [`HEADER: ${settings.title || ''}`, `TEXT: ${settings.description || ''}`];
+    if (settings.footer?.trim()) lines.push('SEPARATOR', `FOOTER: ${settings.footer}`);
+    return this.welcomeBuilder.parseLayout(lines.join('\n'));
+  }
+
+  getTempVoiceSetupLayoutElements(settings) {
+    if (Array.isArray(settings.setupPanelLayout) && settings.setupPanelLayout.length) {
+      return settings.setupPanelLayout.map((element) => ({ ...element }));
+    }
+    return [
+      { type: 'header', content: '🎙️ Temporary Voice Control' },
+      { type: 'text', content: 'Selamat datang di sistem **Temporary Voice**!' },
+      { type: 'text', content: 'Untuk membuat room voice pribadimu, ikuti langkah berikut:' },
+      { type: 'text', content: '1️⃣ Masuk ke channel **Join to Create** {hubChannel}' },
+      { type: 'text', content: '2️⃣ Room voice pribadimu akan otomatis dibuat' },
+      { type: 'text', content: '3️⃣ Gunakan `/voice` di dalam room untuk menampilkan panel kontrol' },
+      { type: 'separator' },
+      { type: 'footer', content: 'Panel kontrol berisi 20+ tombol untuk mengatur nama, limit, privasi, dan lainnya.\n⚙️ {server} • Temp Voice System' },
+    ];
+  }
+
+  buildTempVoiceSetupPanel(guild, settings, elements = this.getTempVoiceSetupLayoutElements(settings), color = settings.setupPanelColor || '#5865F2') {
+    const replacements = {
+      '{server}': guild.name,
+      '{hubChannel}': settings.hubChannelId ? `<#${settings.hubChannelId}>` : '`Belum diatur`',
+    };
+    const safeColor = /^#[0-9a-fA-F]{6}$/.test(color) ? color : '#5865F2';
+    const container = new ContainerBuilder().setAccentColor(Number.parseInt(safeColor.slice(1), 16));
+    for (const element of elements) {
+      if (element.type === 'separator') {
+        container.addSeparatorComponents(new SeparatorBuilder().setDivider(true));
+        continue;
+      }
+      let content = String(element.content || '');
+      for (const [token, value] of Object.entries(replacements)) content = content.replaceAll(token, value);
+      if (element.type === 'header') content = `# ${content}`;
+      if (element.type === 'footer') content = `-# ${content}`;
+      container.addTextDisplayComponents(new TextDisplayBuilder().setContent(content));
+    }
+    return container;
+  }
+
+  getLayoutDraftKey(interaction, type) {
+    return `${interaction.guildId}:${interaction.user.id}:${type}`;
+  }
+
+  renderLayoutEditor(interaction, type, status = '') {
+    const key = this.getLayoutDraftKey(interaction, type);
+    const draft = this.layoutDrafts.get(key);
+    if (!draft) return null;
+
+    const isSetupPanel = type === 'tempvoice_setup';
+    const title = isSetupPanel ? 'Panduan Temporary Voice' : type === 'welcome' ? 'Welcome' : 'Goodbye';
+    const blockNames = { header: 'Header', text: 'Text', footer: 'Footer', separator: 'Separator' };
+    const blockLines = draft.elements.length
+      ? draft.elements.map((element, index) => {
+        const selected = index === draft.selectedIndex ? ' **(dipilih)**' : '';
+        const value = element.type === 'separator'
+          ? 'Garis pemisah'
+          : String(element.content || '').replace(/\s+/g, ' ').slice(0, 180) || '(kosong)';
+        return `**${index + 1}. ${blockNames[element.type] || 'Text'}**${selected}\n> ${value}`;
+      }).join('\n')
+      : '_Belum ada elemen. Tambahkan dari menu di bawah._';
+    const content = [
+      `# Editor ${title}`,
+      'Pilih elemen untuk menambahkannya, lalu atur urutan dan isi. Perubahan baru tersimpan setelah menekan **Simpan**.',
+      `\n${blockLines}`,
+      isSetupPanel
+        ? `\nWarna Hex panel: \`${draft.color}\``
+        : `\nWarna aksen: \`${draft.color}\` • Banner: ${draft.imageUrl ? 'diatur' : 'tidak ada'}`,
+      status ? `\n${status}` : '',
+      isSetupPanel
+        ? '\nToken yang bisa dipakai: `{server}`, `{hubChannel}`.'
+        : '\nToken yang bisa dipakai: `{user}`, `{username}`, `{server}`, `{count}`, `{userId}`.',
+    ].join('\n');
+
+    const addRow = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(`cfg_le_add_${type}`)
+        .setPlaceholder('Tambah elemen...')
+        .addOptions([
+          { label: 'Header', value: 'header', description: 'Judul besar di pesan' },
+          { label: 'Text', value: 'text', description: 'Teks isi pesan' },
+          { label: 'Footer', value: 'footer', description: 'Teks kecil di bagian bawah' },
+          { label: 'Separator', value: 'separator', description: 'Garis pemisah antar elemen' },
+        ]),
+    );
+    const selectRow = draft.elements.length
+      ? new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`cfg_le_select_${type}`)
+          .setPlaceholder('Pilih elemen untuk diedit atau dipindahkan...')
+          .addOptions(draft.elements.map((element, index) => ({
+            label: `${index + 1}. ${blockNames[element.type] || 'Text'}`.slice(0, 100),
+            value: String(index),
+            description: element.type === 'separator'
+              ? 'Pemisah'
+              : String(element.content || '').replace(/\s+/g, ' ').slice(0, 90) || '(kosong)',
+            default: index === draft.selectedIndex,
+          }))),
+      )
+      : null;
+    const editRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`cfg_le_up_${type}`).setLabel('Naik').setStyle(ButtonStyle.Secondary).setDisabled(draft.selectedIndex <= 0),
+      new ButtonBuilder().setCustomId(`cfg_le_down_${type}`).setLabel('Turun').setStyle(ButtonStyle.Secondary).setDisabled(draft.selectedIndex < 0 || draft.selectedIndex >= draft.elements.length - 1),
+      new ButtonBuilder().setCustomId(`cfg_le_edit_${type}`).setLabel('Edit isi').setStyle(ButtonStyle.Secondary).setDisabled(draft.selectedIndex < 0 || draft.elements[draft.selectedIndex]?.type === 'separator'),
+      new ButtonBuilder().setCustomId(`cfg_le_remove_${type}`).setLabel('Hapus elemen').setStyle(ButtonStyle.Danger).setDisabled(draft.selectedIndex < 0),
+    );
+    const actionButtons = [
+      new ButtonBuilder().setCustomId(`cfg_le_preview_${type}`).setLabel('Preview').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`cfg_le_style_${type}`).setLabel(isSetupPanel ? 'Warna Hex' : 'Warna / Banner').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`cfg_le_clear_${type}`).setLabel('Kosongkan').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`cfg_le_save_${type}`).setLabel('Simpan').setStyle(ButtonStyle.Success),
+    ];
+    const actionRow = new ActionRowBuilder().addComponents(...actionButtons);
+    const container = new ContainerBuilder()
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent(content))
+      .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
+      .addActionRowComponents(addRow);
+    if (selectRow) container.addActionRowComponents(selectRow);
+    container.addActionRowComponents(editRow, actionRow);
+    return { flags: [MessageFlags.IsComponentsV2, MessageFlags.Ephemeral], components: [container] };
+  }
+
+  async startLayoutEditor(interaction, type) {
+    const guildSettings = this.store.get(interaction.guildId);
+    const settings = type === 'tempvoice_setup' ? guildSettings.tempvoice : guildSettings[type];
+    const key = this.getLayoutDraftKey(interaction, type);
+    this.layoutDrafts.set(key, {
+      elements: (type === 'tempvoice_setup'
+        ? this.getTempVoiceSetupLayoutElements(settings)
+        : this.getMessageLayoutElements(settings)).slice(0, 8),
+      selectedIndex: -1,
+      color: type === 'tempvoice_setup'
+        ? settings.setupPanelColor || '#5865F2'
+        : settings.color || (type === 'welcome' ? '#5865F2' : '#ED4245'),
+      imageUrl: settings.imageUrl || '',
+    });
+    await interaction.reply(this.renderLayoutEditor(interaction, type));
+  }
+
+  async handleLayoutEditorInteraction(interaction) {
+    const styleSubmit = interaction.customId.match(/^cfg_le_style_submit_(welcome|goodbye|tempvoice_setup)$/);
+    const match = styleSubmit
+      ? [interaction.customId, 'style_submit', styleSubmit[1], undefined]
+      : interaction.customId.match(/^cfg_le_(add|select|up|down|edit|remove|preview|back|style|clear|save|item)_(welcome|goodbye|tempvoice_setup)(?:_(header|text|footer))?$/);
+    if (!match) return false;
+    const [, action, type, elementType] = match;
+    const key = this.getLayoutDraftKey(interaction, type);
+    const draft = this.layoutDrafts.get(key);
+    if (!draft) {
+      await interaction.reply({ content: 'Sesi editor sudah berakhir. Buka kembali editor dari dashboard.', flags: MessageFlags.Ephemeral });
+      return true;
+    }
+
+    if (interaction.isStringSelectMenu()) {
+      if (action === 'select') {
+        draft.selectedIndex = Number(interaction.values[0]);
+        await interaction.update(this.renderLayoutEditor(interaction, type));
+        return true;
+      }
+      if (action === 'add') {
+        const selectedType = interaction.values[0];
+        if (draft.elements.length >= 8) {
+          await interaction.reply({ content: 'Maksimal 8 elemen di editor ini.', flags: MessageFlags.Ephemeral });
+          return true;
+        }
+        delete draft.editingIndex;
+        draft.insertIndex = draft.selectedIndex >= 0 ? draft.selectedIndex + 1 : draft.elements.length;
+        if (selectedType === 'separator') {
+          const candidate = [...draft.elements];
+          candidate.splice(draft.insertIndex, 0, { type: 'separator' });
+          draft.elements = candidate;
+          draft.selectedIndex = draft.insertIndex;
+          await interaction.update(this.renderLayoutEditor(interaction, type));
+          return true;
+        }
+        const modal = new ModalBuilder()
+          .setCustomId(`cfg_le_item_${type}_${selectedType}`)
+          .setTitle(`Tambah ${selectedType === 'header' ? 'Header' : selectedType === 'footer' ? 'Footer' : 'Text'}`)
+          .addComponents(new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+              .setCustomId('content')
+              .setLabel('Isi elemen (token dinamis didukung)')
+              .setStyle(TextInputStyle.Paragraph)
+              .setMaxLength(1000)
+              .setRequired(true),
+          ));
+        await interaction.showModal(modal);
+        return true;
+      }
+    }
+
+    if (interaction.isModalSubmit()) {
+      if (action === 'item') {
+        const content = interaction.fields.getTextInputValue('content').trim();
+        if (!content) {
+          await interaction.reply({ content: 'Isi elemen tidak boleh kosong.', flags: MessageFlags.Ephemeral });
+          return true;
+        }
+        if (Number.isInteger(draft.editingIndex)) {
+          draft.elements[draft.editingIndex] = { type: elementType, content };
+          draft.selectedIndex = draft.editingIndex;
+          delete draft.editingIndex;
+        } else {
+          const index = Math.min(draft.insertIndex ?? draft.elements.length, draft.elements.length);
+          draft.elements.splice(index, 0, { type: elementType, content });
+          draft.selectedIndex = index;
+        }
+        await interaction.update(this.renderLayoutEditor(interaction, type));
+        return true;
+      }
+      if (action === 'style_submit') {
+        const rawColor = interaction.fields.getTextInputValue('color').trim();
+        const color = rawColor.startsWith('#') ? rawColor : `#${rawColor}`;
+        const imageUrl = type === 'tempvoice_setup' ? '' : interaction.fields.getTextInputValue('image').trim();
+        if (!/^#[0-9a-fA-F]{6}$/.test(color)) {
+          await interaction.reply({ content: 'Warna harus berupa kode hex 6 digit, contoh `#5865F2`.', flags: MessageFlags.Ephemeral });
+          return true;
+        }
+        if (imageUrl && !this.welcomeBuilder.getImageUrl(imageUrl)) {
+          await interaction.reply({ content: 'URL gambar harus URL HTTP/HTTPS yang valid. Gunakan tautan langsung gambar, termasuk `.gif`.', flags: MessageFlags.Ephemeral });
+          return true;
+        }
+        draft.color = color;
+        draft.imageUrl = imageUrl;
+        await interaction.update(this.renderLayoutEditor(interaction, type));
+        return true;
+      }
+    }
+
+    if (interaction.isButton()) {
+      if (action === 'up' || action === 'down') {
+        const to = draft.selectedIndex + (action === 'up' ? -1 : 1);
+        if (draft.selectedIndex >= 0 && to >= 0 && to < draft.elements.length) {
+          [draft.elements[draft.selectedIndex], draft.elements[to]] = [draft.elements[to], draft.elements[draft.selectedIndex]];
+          draft.selectedIndex = to;
+        }
+      } else if (action === 'remove') {
+        if (draft.selectedIndex >= 0) {
+          draft.elements.splice(draft.selectedIndex, 1);
+          draft.selectedIndex = Math.min(draft.selectedIndex, draft.elements.length - 1);
+        }
+      } else if (action === 'clear') {
+        draft.elements = [];
+        draft.selectedIndex = -1;
+      } else if (action === 'edit') {
+        const element = draft.elements[draft.selectedIndex];
+        if (element && element.type !== 'separator') {
+          const modal = new ModalBuilder()
+            .setCustomId(`cfg_le_item_${type}_${element.type}`)
+            .setTitle(`Edit ${element.type === 'header' ? 'Header' : element.type === 'footer' ? 'Footer' : 'Text'}`)
+            .addComponents(new ActionRowBuilder().addComponents(
+              new TextInputBuilder().setCustomId('content').setLabel('Isi elemen').setStyle(TextInputStyle.Paragraph).setMaxLength(1000).setValue(String(element.content || '').slice(0, 1000)).setRequired(true),
+            ));
+          draft.editingIndex = draft.selectedIndex;
+          await interaction.showModal(modal);
+          return true;
+        }
+      } else if (action === 'style') {
+        const modal = new ModalBuilder()
+          .setCustomId(`cfg_le_style_submit_${type}`)
+          .setTitle(type === 'tempvoice_setup' ? 'Warna Hex Panel Setup' : 'Warna dan Banner Preview')
+          .addComponents(new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId('color').setLabel('Warna aksen (Hex)').setStyle(TextInputStyle.Short).setValue(draft.color).setRequired(true),
+          ));
+        if (type !== 'tempvoice_setup') {
+          modal.addComponents(new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId('image').setLabel('URL gambar atau GIF langsung (opsional)').setStyle(TextInputStyle.Short).setMaxLength(4000).setValue(draft.imageUrl).setRequired(false),
+          ));
+        }
+        await interaction.showModal(modal);
+        return true;
+      } else if (action === 'preview') {
+        const guildSettings = this.store.get(interaction.guildId);
+        const current = type === 'tempvoice_setup' ? guildSettings.tempvoice : guildSettings[type];
+        const options = { ...current, layout: draft.elements, color: draft.color, imageUrl: draft.imageUrl };
+        const preview = type === 'tempvoice_setup'
+          ? this.buildTempVoiceSetupPanel(interaction.guild, this.store.get(interaction.guildId).tempvoice, draft.elements, draft.color)
+          : type === 'welcome'
+            ? this.welcomeBuilder.buildWelcomeContainer(interaction.member, options)
+            : this.welcomeBuilder.buildGoodbyeContainer(interaction.member, options);
+        const backRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`cfg_le_back_${type}`).setLabel('Kembali ke editor').setStyle(ButtonStyle.Secondary),
+        );
+        preview.addActionRowComponents(backRow);
+        await interaction.update({ flags: [MessageFlags.IsComponentsV2, MessageFlags.Ephemeral], components: [preview] });
+        return true;
+      } else if (action === 'back') {
+        await interaction.update(this.renderLayoutEditor(interaction, type));
+        return true;
+      } else if (action === 'save') {
+        if (!draft.elements.some((element) => element.type !== 'separator' && element.content?.trim())) {
+          await interaction.reply({ content: 'Tambahkan setidaknya satu elemen teks sebelum menyimpan.', flags: MessageFlags.Ephemeral });
+          return true;
+        }
+        const guildSettings = this.store.get(interaction.guildId);
+        const current = type === 'tempvoice_setup' ? guildSettings.tempvoice : guildSettings[type];
+        if (type === 'tempvoice_setup') {
+          const previous = Array.isArray(current.setupPanelHistory) ? current.setupPanelHistory : [];
+          this.store.set(interaction.guildId, {
+            tempvoice: {
+              setupPanelLayout: draft.elements,
+              setupPanelColor: draft.color,
+              setupPanelHistory: [{
+                editedAt: new Date().toISOString(),
+                editedBy: interaction.user.id,
+                snapshot: {
+                  setupPanelLayout: draft.elements.map((element) => ({ ...element })),
+                  setupPanelColor: draft.color,
+                },
+              }, ...previous].slice(0, 10),
+            },
+          });
+        } else {
+          const updated = this.recordEditHistory(current, { layout: draft.elements, color: draft.color, imageUrl: draft.imageUrl }, interaction.user.id);
+          this.store.set(interaction.guildId, { [type]: updated });
+        }
+        const status = type === 'tempvoice_setup'
+          ? '✅ Isi panduan berhasil disimpan. Klik "Kirim Panel Sekarang" untuk menerbitkan pesan setup terbaru.'
+          : '✅ Pengaturan berhasil disimpan. Riwayat edit diperbarui.';
+        await interaction.update(this.renderLayoutEditor(interaction, type, status));
+        return true;
+      }
+      await interaction.update(this.renderLayoutEditor(interaction, type));
+      return true;
+    }
+    return false;
+  }
+
+  async refreshTempVoicePanels(guildId) {
+    const settings = this.store.get(guildId).tempvoice;
+    for (const state of this.tvManager?.activeChannels?.values?.() || []) {
+      if (state.channel?.guild?.id !== guildId) continue;
+      state.panelColor = settings.panelColor || '#5865F2';
+      await this.tvManager.controller.refreshPanel(state);
+    }
+  }
+
+  summarizeMessageLayout(settings) {
+    const elements = this.getMessageLayoutElements(settings);
+    const count = (type) => elements.filter((element) => element.type === type).length;
+    return `${count('header')} header • ${count('footer')} footer • ${count('separator')} pemisah`;
   }
 
   // ── Main Dashboard ────────────────────────────────────────────────────────
@@ -173,15 +531,15 @@ export class SetupDashboard {
 
     const content =
       `# 👋 Pengaturan Welcome & Goodbye\n\n` +
-      `Atur pesan selamat datang dan perpisahan. Kamu bisa menyesuaikan kata-kata, warna, dan link gambar melalui pop-up interaktif.\n\n` +
+      `Klik **Edit Layout** untuk memilih elemen Header, Text, Footer, dan Separator dari menu. Elemen dapat ditambahkan berkali-kali, disusun ulang, dilihat dalam daftar, lalu di-preview sebelum disimpan.\n\n` +
       `### 🌟 Welcome Settings\n` +
       `• Status: ${s.welcome.enabled ? '🟢 **Aktif**' : '🔴 **Nonaktif**'}\n` +
       `• Channel: ${fmtCh(s.welcome.channelId)}\n` +
-      `• Judul: \`${s.welcome.title}\`\n\n` +
+      `• Layout: ${this.summarizeMessageLayout(s.welcome)}\n\n` +
       `### 👋 Goodbye Settings\n` +
       `• Status: ${s.goodbye.enabled ? '🟢 **Aktif**' : '🔴 **Nonaktif**'}\n` +
       `• Channel: ${fmtCh(s.goodbye.channelId)}\n` +
-      `• Judul: \`${s.goodbye.title}\``;
+      `• Layout: ${this.summarizeMessageLayout(s.goodbye)}`;
 
     const row1 = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
@@ -190,13 +548,17 @@ export class SetupDashboard {
         .setStyle(s.welcome.enabled ? ButtonStyle.Danger : ButtonStyle.Success),
       new ButtonBuilder()
         .setCustomId(CFG_IDS.MODAL_WELCOME)
-        .setLabel('Edit Welcome Pop-up')
+        .setLabel('Edit Layout Welcome')
         .setEmoji('✏️')
         .setStyle(ButtonStyle.Primary),
       new ButtonBuilder()
         .setCustomId(CFG_IDS.TEST_WELCOME)
         .setLabel('Preview Welcome')
         .setEmoji('👁️')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(CFG_IDS.HISTORY_WELCOME)
+        .setLabel('Riwayat Welcome')
         .setStyle(ButtonStyle.Secondary),
     );
 
@@ -207,13 +569,17 @@ export class SetupDashboard {
         .setStyle(s.goodbye.enabled ? ButtonStyle.Danger : ButtonStyle.Success),
       new ButtonBuilder()
         .setCustomId(CFG_IDS.MODAL_GOODBYE)
-        .setLabel('Edit Goodbye Pop-up')
+        .setLabel('Edit Layout Goodbye')
         .setEmoji('✏️')
         .setStyle(ButtonStyle.Primary),
       new ButtonBuilder()
         .setCustomId(CFG_IDS.TEST_GOODBYE)
         .setLabel('Preview Goodbye')
         .setEmoji('👁️')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(CFG_IDS.HISTORY_GOODBYE)
+        .setLabel('Riwayat Goodbye')
         .setStyle(ButtonStyle.Secondary),
     );
 
@@ -258,6 +624,70 @@ export class SetupDashboard {
 
   // ── Booster Submenu ───────────────────────────────────────────────────────
 
+  recordEditHistory(current, updated, editorId) {
+    const previousHistory = Array.isArray(current.editHistory) ? current.editHistory : [];
+    const entry = {
+      editedAt: new Date().toISOString(),
+      editedBy: editorId,
+      snapshot: {
+        ...updated,
+        layout: Array.isArray(updated.layout)
+          ? updated.layout.map((element) => ({ ...element }))
+          : updated.layout,
+      },
+    };
+    return { ...updated, editHistory: [entry, ...previousHistory].slice(0, 10) };
+  }
+
+  async showEditHistory(interaction, type) {
+    const settings = this.store.get(interaction.guildId)[type];
+    const title = type === 'welcome' ? 'Welcome' : 'Goodbye';
+    const history = Array.isArray(settings.editHistory) ? settings.editHistory : [];
+    const lines = history.length
+      ? history.map((entry, index) => {
+        const snapshot = entry.snapshot || {};
+        const editedMs = Date.parse(entry.editedAt);
+        const timestamp = Number.isFinite(editedMs) ? Math.floor(editedMs / 1000) : null;
+        const editedAt = timestamp ? `<t:${timestamp}:F> (<t:${timestamp}:R>)` : 'Waktu tidak diketahui';
+        const editedBy = entry.editedBy ? `<@${entry.editedBy}>` : 'Tidak diketahui';
+        const elements = this.getMessageLayoutElements(snapshot);
+        const header = elements.find((element) => element.type === 'header')?.content || snapshot.title || 'Custom layout';
+        const safeHeader = String(header).replace(/\s+/g, ' ').slice(0, 80);
+        const separators = elements.filter((element) => element.type === 'separator').length;
+        const headers = elements.filter((element) => element.type === 'header').length;
+        const footers = elements.filter((element) => element.type === 'footer').length;
+        return `**${index + 1}. ${editedAt}** • oleh ${editedBy}\n> ${safeHeader} • ${headers} header • ${footers} footer • ${separators} separator • ${snapshot.color || '-'}`;
+      })
+      : ['Belum ada perubahan yang tercatat. Riwayat akan dibuat setelah pengaturan disimpan.'];
+
+    const container = new ContainerBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`### Riwayat Edit ${title}\n\n${lines.join('\n\n')}`),
+    );
+    await interaction.reply({
+      flags: [MessageFlags.IsComponentsV2, MessageFlags.Ephemeral],
+      components: [container],
+    });
+  }
+
+  async showTempVoiceSetupHistory(interaction) {
+    const history = this.store.get(interaction.guildId).tempvoice.setupPanelHistory || [];
+    const lines = history.length
+      ? history.map((entry, index) => {
+        const timestamp = Date.parse(entry.editedAt);
+        const date = Number.isFinite(timestamp) ? `<t:${Math.floor(timestamp / 1000)}:F>` : 'Waktu tidak diketahui';
+        const blocks = Array.isArray(entry.snapshot?.setupPanelLayout) ? entry.snapshot.setupPanelLayout : [];
+        const counts = (type) => blocks.filter((block) => block.type === type).length;
+        const editor = entry.editedBy ? `<@${entry.editedBy}>` : 'Tidak diketahui';
+        const color = entry.snapshot?.setupPanelColor || '#5865F2';
+        return `**${index + 1}. ${date}** • oleh ${editor}\n> ${counts('header')} header • ${counts('footer')} footer • ${counts('separator')} separator • ${color}`;
+      })
+      : ['Belum ada perubahan panduan setup Temporary Voice yang tercatat.'];
+    const container = new ContainerBuilder().addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`### Riwayat Edit Panduan Temporary Voice\n\n${lines.join('\n\n')}`),
+    );
+    await interaction.reply({ flags: [MessageFlags.IsComponentsV2, MessageFlags.Ephemeral], components: [container] });
+  }
+
   buildBoostDashboard(guildId) {
     const s = this.store.get(guildId);
     const fmtCh = (id) => (id ? `<#${id}>` : '`Belum diatur`');
@@ -269,7 +699,7 @@ export class SetupDashboard {
       `• Status: ${s.boost.enabled ? '🟢 **Aktif**' : '🔴 **Nonaktif**'}\n` +
       `• Channel Notif: ${fmtCh(s.boost.channelId)}\n` +
       `• Tema Tampilan: **${s.boost.theme.toUpperCase()}** (${s.boost.theme === 'dark' ? 'Dark Grunge - Gbr 2' : 'White Splatter - Gbr 3'})\n` +
-      `• Tag Header: \`Otomatis (Username Booster)\`\n` +
+      `• Header Kartu: \`${s.boost.titleHeader || '{username}'}\`\n` +
       `• Subtitle: \`${s.boost.subtitle}\`\n` +
       `• Notif Unboost: ${s.boost.unboostNotify ? '🟢 Aktif' : '🔴 Nonaktif'}`;
 
@@ -379,6 +809,14 @@ export class SetupDashboard {
         .setLabel('Kirim Panel Sekarang')
         .setEmoji('🚀')
         .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(CFG_IDS.EDIT_TV_SETUP_LAYOUT)
+        .setLabel('Edit Pesan Setup')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(CFG_IDS.HISTORY_TV_SETUP)
+        .setLabel('Riwayat Pesan')
+        .setStyle(ButtonStyle.Secondary),
     );
 
     const row2 = new ActionRowBuilder().addComponents(
@@ -430,103 +868,11 @@ export class SetupDashboard {
   // ── Modals Opener ─────────────────────────────────────────────────────────
 
   async showWelcomeModal(interaction) {
-    const s = this.store.get(interaction.guildId);
-    const modal = new ModalBuilder()
-      .setCustomId(CFG_IDS.SUBMIT_WELCOME_MODAL)
-      .setTitle('✏️ Edit Pesan Welcome')
-      .addComponents(
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId('w_title')
-            .setLabel('Judul Embed')
-            .setValue(s.welcome.title)
-            .setStyle(TextInputStyle.Short)
-            .setRequired(true),
-        ),
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId('w_desc')
-            .setLabel('Deskripsi ({user}, {server}, {count})')
-            .setValue(s.welcome.description)
-            .setStyle(TextInputStyle.Paragraph)
-            .setRequired(true),
-        ),
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId('w_color')
-            .setLabel('Warna Hex (e.g. #5865F2)')
-            .setValue(s.welcome.color)
-            .setStyle(TextInputStyle.Short)
-            .setRequired(true),
-        ),
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId('w_image')
-            .setLabel('Banner Image URL (Opsional)')
-            .setValue(s.welcome.imageUrl || '')
-            .setStyle(TextInputStyle.Short)
-            .setRequired(false),
-        ),
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId('w_footer')
-            .setLabel('Footer Text')
-            .setValue(s.welcome.footer)
-            .setStyle(TextInputStyle.Short)
-            .setRequired(false),
-        ),
-      );
-    await interaction.showModal(modal);
+    await this.startLayoutEditor(interaction, 'welcome');
   }
 
   async showGoodbyeModal(interaction) {
-    const s = this.store.get(interaction.guildId);
-    const modal = new ModalBuilder()
-      .setCustomId(CFG_IDS.SUBMIT_GOODBYE_MODAL)
-      .setTitle('✏️ Edit Pesan Goodbye')
-      .addComponents(
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId('g_title')
-            .setLabel('Judul Embed')
-            .setValue(s.goodbye.title)
-            .setStyle(TextInputStyle.Short)
-            .setRequired(true),
-        ),
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId('g_desc')
-            .setLabel('Deskripsi ({user}, {server}, {count})')
-            .setValue(s.goodbye.description)
-            .setStyle(TextInputStyle.Paragraph)
-            .setRequired(true),
-        ),
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId('g_color')
-            .setLabel('Warna Hex (e.g. #ED4245)')
-            .setValue(s.goodbye.color)
-            .setStyle(TextInputStyle.Short)
-            .setRequired(true),
-        ),
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId('g_image')
-            .setLabel('Banner Image URL (Opsional)')
-            .setValue(s.goodbye.imageUrl || '')
-            .setStyle(TextInputStyle.Short)
-            .setRequired(false),
-        ),
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId('g_footer')
-            .setLabel('Footer Text')
-            .setValue(s.goodbye.footer)
-            .setStyle(TextInputStyle.Short)
-            .setRequired(false),
-        ),
-      );
-    await interaction.showModal(modal);
+    await this.startLayoutEditor(interaction, 'goodbye');
   }
 
   async showBoostModal(interaction) {
@@ -535,6 +881,14 @@ export class SetupDashboard {
       .setCustomId(CFG_IDS.SUBMIT_BOOST_MODAL)
       .setTitle('✏️ Edit Kartu Booster')
       .addComponents(
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId('b_header')
+            .setLabel('Header ({username} / {server} bisa dinamis)')
+            .setValue(s.boost.titleHeader || '{username}')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true),
+        ),
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId('b_subtitle')
@@ -585,6 +939,14 @@ export class SetupDashboard {
             .setStyle(TextInputStyle.Short)
             .setRequired(true),
         ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId('tv_panel_color')
+            .setLabel('Warna aksen panel (Hex, contoh #5865F2)')
+            .setValue(s.tempvoice.panelColor || '#5865F2')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true),
+        ),
       );
     await interaction.showModal(modal);
   }
@@ -594,6 +956,11 @@ export class SetupDashboard {
   async handleInteraction(interaction) {
     const guildId = interaction.guildId;
     if (!guildId) return;
+
+    if (interaction.customId?.startsWith('cfg_le_')) {
+      const handled = await this.handleLayoutEditorInteraction(interaction);
+      if (handled) return;
+    }
 
     // 1. Tombol Navigasi Menu
     if (interaction.isButton()) {
@@ -665,6 +1032,14 @@ export class SetupDashboard {
           });
           return;
         }
+
+        case CFG_IDS.HISTORY_WELCOME:
+          await this.showEditHistory(interaction, 'welcome');
+          return;
+
+        case CFG_IDS.HISTORY_GOODBYE:
+          await this.showEditHistory(interaction, 'goodbye');
+          return;
 
         // Booster toggles & modals
         case CFG_IDS.TOGGLE_BOOST: {
@@ -754,6 +1129,14 @@ export class SetupDashboard {
           await this.showTempVoiceModal(interaction);
           return;
 
+        case CFG_IDS.EDIT_TV_SETUP_LAYOUT:
+          await this.startLayoutEditor(interaction, 'tempvoice_setup');
+          return;
+
+        case CFG_IDS.HISTORY_TV_SETUP:
+          await this.showTempVoiceSetupHistory(interaction);
+          return;
+
         case CFG_IDS.SEND_TV_PANEL: {
           await interaction.deferUpdate();
           const s = this.store.get(guildId);
@@ -767,24 +1150,8 @@ export class SetupDashboard {
             return;
           }
 
-          // Kirim panel setup permanen untuk member
-          const { ContainerBuilder, TextDisplayBuilder, SeparatorBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = await import('discord.js');
-          const setupPanel = new ContainerBuilder()
-            .addTextDisplayComponents(
-              new TextDisplayBuilder().setContent(
-                `# 🎙️ Temporary Voice Control\n\n` +
-                `Selamat datang di sistem **Temporary Voice**!\n` +
-                `Untuk membuat room voice pribadimu, ikuti langkah berikut:\n\n` +
-                `1️⃣ Masuk ke channel **Join to Create** <#${s.tempvoice.hubChannelId || '?'}>\n` +
-                `2️⃣ Room voice pribadimu akan otomatis dibuat\n` +
-                `3️⃣ Gunakan \`/voice\` di dalam room untuk menampilkan panel kontrol\n\n` +
-                `-# Panel kontrol berisi 20+ tombol untuk mengatur nama, limit, privasi, dan lainnya.`,
-              ),
-            )
-            .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
-            .addTextDisplayComponents(
-              new TextDisplayBuilder().setContent(`-# ⚙️ ${interaction.guild.name} • Temp Voice System`),
-            );
+          // Kirim panel panduan setup permanen, terpisah dari UI kontrol voice room.
+          const setupPanel = this.buildTempVoiceSetupPanel(interaction.guild, s.tempvoice);
 
           await targetChannel.send({
             flags: [MessageFlags.IsComponentsV2],
@@ -860,15 +1227,27 @@ export class SetupDashboard {
     if (interaction.isModalSubmit()) {
       switch (interaction.customId) {
         case CFG_IDS.SUBMIT_WELCOME_MODAL: {
-          const title = interaction.fields.getTextInputValue('w_title');
-          const description = interaction.fields.getTextInputValue('w_desc');
-          const color = interaction.fields.getTextInputValue('w_color');
-          const imageUrl = interaction.fields.getTextInputValue('w_image');
-          const footer = interaction.fields.getTextInputValue('w_footer');
+          const layout = interaction.fields.getTextInputValue('w_layout').trim();
+          const layoutBlocks = this.welcomeBuilder.parseLayout(layout);
+          if (layoutBlocks.length > 8 || !layoutBlocks.some((block) => block.type !== 'separator' && block.content.trim())) {
+            await interaction.reply({ content: 'Layout harus berisi teks dan maksimal 8 blok agar muat di pesan Discord.', flags: MessageFlags.Ephemeral });
+            return;
+          }
+          const rawColor = interaction.fields.getTextInputValue('w_color').trim();
+          const color = rawColor.startsWith('#') ? rawColor : `#${rawColor}`;
+          if (!/^#[0-9a-fA-F]{6}$/.test(color)) {
+            await interaction.reply({ content: 'Warna Welcome harus berupa kode hex 6 digit, misalnya `#5865F2`.', flags: MessageFlags.Ephemeral });
+            return;
+          }
+          const imageUrl = interaction.fields.getTextInputValue('w_image').trim();
 
-          this.store.set(guildId, {
-            welcome: { title, description, color, imageUrl, footer },
-          });
+          const current = this.store.get(guildId).welcome;
+          const updated = this.recordEditHistory(
+            current,
+            { layout, color, imageUrl },
+            interaction.user.id,
+          );
+          this.store.set(guildId, { welcome: updated });
 
           await interaction.reply({
             content: '✅ Pengaturan pesan **Welcome** berhasil disimpan!',
@@ -878,15 +1257,27 @@ export class SetupDashboard {
         }
 
         case CFG_IDS.SUBMIT_GOODBYE_MODAL: {
-          const title = interaction.fields.getTextInputValue('g_title');
-          const description = interaction.fields.getTextInputValue('g_desc');
-          const color = interaction.fields.getTextInputValue('g_color');
-          const imageUrl = interaction.fields.getTextInputValue('g_image');
-          const footer = interaction.fields.getTextInputValue('g_footer');
+          const layout = interaction.fields.getTextInputValue('g_layout').trim();
+          const layoutBlocks = this.welcomeBuilder.parseLayout(layout);
+          if (layoutBlocks.length > 8 || !layoutBlocks.some((block) => block.type !== 'separator' && block.content.trim())) {
+            await interaction.reply({ content: 'Layout harus berisi teks dan maksimal 8 blok agar muat di pesan Discord.', flags: MessageFlags.Ephemeral });
+            return;
+          }
+          const rawColor = interaction.fields.getTextInputValue('g_color').trim();
+          const color = rawColor.startsWith('#') ? rawColor : `#${rawColor}`;
+          if (!/^#[0-9a-fA-F]{6}$/.test(color)) {
+            await interaction.reply({ content: 'Warna Goodbye harus berupa kode hex 6 digit, misalnya `#ED4245`.', flags: MessageFlags.Ephemeral });
+            return;
+          }
+          const imageUrl = interaction.fields.getTextInputValue('g_image').trim();
 
-          this.store.set(guildId, {
-            goodbye: { title, description, color, imageUrl, footer },
-          });
+          const current = this.store.get(guildId).goodbye;
+          const updated = this.recordEditHistory(
+            current,
+            { layout, color, imageUrl },
+            interaction.user.id,
+          );
+          this.store.set(guildId, { goodbye: updated });
 
           await interaction.reply({
             content: '✅ Pengaturan pesan **Goodbye** berhasil disimpan!',
@@ -896,15 +1287,16 @@ export class SetupDashboard {
         }
 
         case CFG_IDS.SUBMIT_BOOST_MODAL: {
+          const titleHeader = interaction.fields.getTextInputValue('b_header').trim();
           const subtitle = interaction.fields.getTextInputValue('b_subtitle');
           const backgroundImageUrl = interaction.fields.getTextInputValue('b_bg');
 
           this.store.set(guildId, {
-            boost: { subtitle, backgroundImageUrl },
+            boost: { titleHeader, subtitle, backgroundImageUrl },
           });
 
           await interaction.reply({
-            content: '✅ Pengaturan teks & banner **Server Booster** berhasil disimpan! Tag header otomatis dari username member yang boost.',
+            content: '✅ Pengaturan header, subtitle, dan banner **Server Booster** berhasil disimpan. Gunakan `{username}` atau `{server}` pada header untuk mengisinya secara dinamis.',
             flags: MessageFlags.Ephemeral,
           });
           return;
@@ -916,13 +1308,19 @@ export class SetupDashboard {
           const defaultLimit = parseInt(rawLimit, 10) || 0;
           const rawMaxRooms = interaction.fields.getTextInputValue('tv_max_rooms');
           const maxRooms = parseInt(rawMaxRooms, 10) || 0;
+          const panelColor = interaction.fields.getTextInputValue('tv_panel_color').trim();
+          if (!/^#[0-9a-fA-F]{6}$/.test(panelColor)) {
+            await interaction.reply({ content: 'Warna panel harus berupa kode hex 6 digit, misalnya `#5865F2`.', flags: MessageFlags.Ephemeral });
+            return;
+          }
 
           this.store.set(guildId, {
-            tempvoice: { channelNameTemplate, defaultLimit, maxRooms },
+            tempvoice: { channelNameTemplate, defaultLimit, maxRooms, panelColor },
           });
+          await this.refreshTempVoicePanels(guildId);
 
           await interaction.reply({
-            content: `✅ Pengaturan **Temp Voice** berhasil disimpan!\n• Default Member Limit: **${defaultLimit === 0 ? 'Unlimited' : defaultLimit}**\n• Kuota Maksimal Room: **${maxRooms === 0 ? 'Unlimited' : maxRooms}**`,
+            content: `✅ Pengaturan **Temp Voice** berhasil disimpan!\n• Default Member Limit: **${defaultLimit === 0 ? 'Unlimited' : defaultLimit}**\n• Kuota Maksimal Room: **${maxRooms === 0 ? 'Unlimited' : maxRooms}**\n• Warna panel: **${panelColor}**`,
             flags: MessageFlags.Ephemeral,
           });
           return;

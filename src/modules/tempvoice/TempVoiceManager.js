@@ -2,6 +2,7 @@ import { MessageFlags, ChannelType, PermissionFlagsBits } from 'discord.js';
 import { TempVoiceChannel } from './TempVoiceChannel.js';
 import { TempVoiceController, TV_BUTTON_IDS, TV_MODAL_IDS } from './TempVoiceController.js';
 
+const MAX_ROOMS_PER_OWNER = 3;
 
 /**
  * TempVoiceManager — Mengatur sistem "Join to Create" dan siklus room temp voice.
@@ -17,8 +18,6 @@ export class TempVoiceManager {
     this.activeChannels = new Map();
     /** voiceChannelId -> Array of message IDs */
     this.panelMessages = new Map();
-    /** voiceChannelId -> Timeout jeda hapus saat kosong */
-    this.leaveTimers = new Map();
     /** Set user ID yang sedang dalam proses membuat room (mencegah double-create karena race condition) */
     this.creatingUsers = new Set();
     /**
@@ -56,6 +55,20 @@ export class TempVoiceManager {
 
   getStateByOwner(userId) {
     return [...this.activeChannels.values()].find((s) => s.owner.id === userId);
+  }
+
+  getStatesByOwner(userId, guildId) {
+    return [...this.activeChannels.values()].filter(
+      (state) => state.owner.id === userId && state.channel?.guild?.id === guildId,
+    );
+  }
+
+  saveOwnerChannelName(guildId, userId, channelName) {
+    this.store.set(guildId, {
+      tempvoice: {
+        ownerChannelNames: { [userId]: channelName },
+      },
+    });
   }
 
   async sendPanelToChannel(textChannel, state) {
@@ -98,6 +111,17 @@ export class TempVoiceManager {
 
   async onInteractionCreate(interaction) {
     try {
+      if (interaction.isStringSelectMenu() && interaction.customId.startsWith('tv_transfer_select:')) {
+        const channelId = interaction.customId.slice('tv_transfer_select:'.length);
+        const state = this.activeChannels.get(channelId);
+        if (!state) {
+          await interaction.reply({ content: 'Room tidak ditemukan atau sudah dihapus.', flags: MessageFlags.Ephemeral });
+          return;
+        }
+        await this.controller.handleTransferSelect(interaction, state);
+        return;
+      }
+
       if (interaction.isButton()) {
         const isTvButton = Object.values(TV_BUTTON_IDS).includes(interaction.customId);
         if (!isTvButton) return;
@@ -128,7 +152,7 @@ export class TempVoiceManager {
           return;
         }
 
-        await this.controller.handleModal(interaction, state);
+        await this.controller.handleModal(interaction, state, this);
       }
     } catch (error) {
       if (error.code === 10062 || error.code === 40060) return;
@@ -139,22 +163,12 @@ export class TempVoiceManager {
   async handleMemberJoin(newState) {
     if (!newState.member || newState.member.user.bot) return;
 
-    // Jika member masuk ke room yang sedang dalam hitungan mundur leaveTimer, batalkan timer
-    if (newState.channelId && this.leaveTimers.has(newState.channelId)) {
-      clearTimeout(this.leaveTimers.get(newState.channelId));
-      this.leaveTimers.delete(newState.channelId);
-    }
-
     const guildId = newState.guild.id;
     const settings = this.store.get(guildId);
     if (!settings?.tempvoice?.enabled) return;
 
     const hubChannelId = settings.tempvoice.hubChannelId;
     if (!hubChannelId || newState.channelId !== hubChannelId) return;
-
-    // --- Debounce: tolak join dalam 8 detik setelah terakhir membuat room ---
-    const lastJoin = this.joinCooldowns.get(newState.member.id) || 0;
-    if (Date.now() - lastJoin < 8000) return;
 
     const owner = newState.member;
 
@@ -163,31 +177,30 @@ export class TempVoiceManager {
     this.creatingUsers.add(owner.id);
 
     try {
-      // Jika owner sudah punya room aktif, langsung pindahkan kembali ke roomnya
-      const existing = this.getStateByOwner(owner.id);
-      if (existing && existing.channel) {
-        // Pastikan channel masih ada di Discord (belum dihapus)
-        const liveChannel = newState.guild.channels.cache.get(existing.channel.id);
-        if (liveChannel) {
-          if (this.leaveTimers.has(existing.channel.id)) {
-            clearTimeout(this.leaveTimers.get(existing.channel.id));
-            this.leaveTimers.delete(existing.channel.id);
-          }
-          try {
-            await owner.voice.setChannel(liveChannel);
-          } catch (err) {
-            console.warn('[TempVoiceManager] Gagal pindah ke existing room:', err.message);
-            // Channel sudah tidak valid, hapus state lama
-            this.activeChannels.delete(existing.channel.id);
-          }
-          return;
-        } else {
-          // Channel sudah tidak ada, bersihkan state lama
-          this.activeChannels.delete(existing.channel.id);
-          this.leaveTimers.delete(existing.channel.id);
+      // Bersihkan state room yang sudah dihapus dari Discord sebelum menghitung kuota owner.
+      for (const state of this.getStatesByOwner(owner.id, guildId)) {
+        if (!newState.guild.channels.cache.has(state.channel.id)) {
+          this.activeChannels.delete(state.channel.id);
+          this.panelMessages.delete(state.channel.id);
         }
       }
 
+      const ownerRoomCount = this.getStatesByOwner(owner.id, guildId).length;
+      if (ownerRoomCount >= MAX_ROOMS_PER_OWNER) {
+        try {
+          await owner.voice.disconnect('Batas maksimal 3 room tempvoice per user tercapai.');
+          await owner.send({
+            content: `⚠️ Kamu sudah mencapai batas maksimal **${MAX_ROOMS_PER_OWNER} room temporary voice**. Room baru bisa dibuat setelah salah satu room milikmu selesai digunakan.`,
+          }).catch(() => {});
+        } catch (err) {
+          console.warn('[TempVoiceManager] Gagal menolak room owner yang melebihi limit:', err);
+        }
+        return;
+      }
+
+      // Cegah event voiceStateUpdate ganda tanpa melewati pengecekan batas owner.
+      const lastJoin = this.joinCooldowns.get(owner.id) || 0;
+      if (Date.now() - lastJoin < 8000) return;
 
       // Cek batas kuota maksimal room tempvoice (0 = Unlimited)
       const maxRooms = settings.tempvoice.maxRooms || 0;
@@ -210,12 +223,15 @@ export class TempVoiceManager {
       this.joinCooldowns.set(owner.id, Date.now());
 
       // Buat room baru
+      const channelName = settings.tempvoice.ownerChannelNames?.[owner.id]
+        || settings.tempvoice.channelNameTemplate;
       const partial = await this.channelFactory.createTempChannel(
         owner,
         settings.tempvoice.categoryId,
-        settings.tempvoice.channelNameTemplate,
+        channelName,
         settings.tempvoice.defaultLimit,
       );
+      partial.panelColor = settings.tempvoice.panelColor || '#5865F2';
 
       // Kirim panel ke text chat dalam voice channel itu sendiri
       let panelMessage = null;
@@ -265,37 +281,10 @@ export class TempVoiceManager {
     }
 
     if (nonBotCount > 0) return;
-
-    // Room kosong -> beri grace period (120 detik) sebelum auto-delete
-    // Selama periode ini, fitur tombol di chat tetap aktif dan owner bisa mengelola atau menghapus room
-    if (this.leaveTimers.has(oldState.channelId)) {
-      clearTimeout(this.leaveTimers.get(oldState.channelId));
-    }
-
-    const timer = setTimeout(async () => {
-      this.leaveTimers.delete(oldState.channelId);
-      const curState = this.activeChannels.get(oldState.channelId);
-      if (!curState) return;
-
-      try {
-        const curCh = curState.channel?.guild?.channels?.cache?.get(curState.channel.id) || curState.channel;
-        const curCount = curCh.members?.filter((m) => !m.user.bot).size || 0;
-        if (curCount === 0) {
-          await this.cleanupTempChannel(oldState.channelId, curState);
-        }
-      } catch {
-        await this.cleanupTempChannel(oldState.channelId, curState);
-      }
-    }, 120000); // 2 menit jeda
-
-    this.leaveTimers.set(oldState.channelId, timer);
+    await this.cleanupTempChannel(oldState.channelId, state);
   }
 
   async cleanupTempChannel(channelId, state) {
-    if (this.leaveTimers.has(channelId)) {
-      clearTimeout(this.leaveTimers.get(channelId));
-      this.leaveTimers.delete(channelId);
-    }
     this.activeChannels.delete(channelId);
     this.panelMessages.delete(channelId);
     await this.channelFactory.deleteTempChannel(state.channel);
@@ -366,6 +355,7 @@ export class TempVoiceManager {
           createdAt: Date.now(),
           controlPanelChannel: interaction.channel,
           controlPanelMessageId: interaction.message?.id || '',
+          panelColor: this.store.get(interaction.guildId).tempvoice.panelColor || '#5865F2',
         };
 
         this.activeChannels.set(interaction.channel.id, recoveredState);

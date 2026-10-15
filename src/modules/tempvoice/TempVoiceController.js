@@ -2,6 +2,7 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  StringSelectMenuBuilder,
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
@@ -109,33 +110,28 @@ export class TempVoiceController {
     return new AttachmentBuilder(TV_GUIDE_PATH, { name: 'tv_guide.png' });
   }
 
-  buildPanelContainer(owner, channel, isLocked = false) {
+  buildPanelContainer(owner, channel, isLocked = false, panelColor = '#5865F2') {
     const guildName = channel.guild?.name || 'Server';
 
     const headerText =
       `### 🔊 ${guildName} — Tempvoice\n\n` +
       `Gunakan tombol di bawah untuk mengatur **voice channel** kamu.\n` +
-      `-# 📌 Ketik \`control panel\` untuk memunculkan panel ini kembali. ` +
-      `-# ✨ Perintah lengkap tersedia via **/voice**`;
+      `-#Perintah lengkap tersedia via **/voice**`;
 
     const rows = this.buildControlRows();
 
     // Gambar panduan di paling atas, lalu header, lalu tombol
+    const color = /^#[0-9a-fA-F]{6}$/.test(panelColor || '') ? panelColor : '#5865F2';
     const container = new ContainerBuilder()
+      .setAccentColor(Number.parseInt(color.slice(1), 16))
       .addMediaGalleryComponents(
         new MediaGalleryBuilder().addItems(
           new MediaGalleryItemBuilder().setURL('attachment://tv_guide.png'),
         ),
       )
-      .addSeparatorComponents(
-        new SeparatorBuilder().setDivider(true),
-      )
-      .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(headerText),
-      )
-      .addSeparatorComponents(
-        new SeparatorBuilder().setDivider(true),
-      )
+      .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent(headerText))
+      .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
       .addActionRowComponents(...rows);
 
     return container;
@@ -146,7 +142,7 @@ export class TempVoiceController {
   }
 
   async sendControlPanel(textChannel, state) {
-    const container = this.buildPanelContainer(state.owner, state.channel, state.isLocked);
+    const container = this.buildPanelContainer(state.owner, state.channel, state.isLocked, state.panelColor);
     const attachment = this.buildGuideAttachment();
     return await textChannel.send({
       flags: [MessageFlags.IsComponentsV2],
@@ -160,7 +156,7 @@ export class TempVoiceController {
     try {
       const msg = await state.controlPanelChannel.messages.fetch(state.controlPanelMessageId);
       if (msg) {
-        const container = this.buildPanelContainer(state.owner, state.channel, state.isLocked);
+        const container = this.buildPanelContainer(state.owner, state.channel, state.isLocked, state.panelColor);
         // Gambar tidak perlu di-re-upload saat edit karena sudah ada di message
         await msg.edit({
           flags: [MessageFlags.IsComponentsV2],
@@ -351,12 +347,7 @@ export class TempVoiceController {
         break;
 
       case TV_BUTTON_IDS.TRANSFER:
-        await this.showUserTargetModal(
-          interaction,
-          TV_MODAL_IDS.TRANSFER,
-          '🔁 Transfer Ownership',
-          'User ID atau @mention calon owner',
-        );
+        await this.showTransferMenu(interaction, state);
         break;
 
       case TV_BUTTON_IDS.DELETE:
@@ -386,6 +377,59 @@ export class TempVoiceController {
       default:
         await interaction.reply({ content: '❓ Aksi belum tersedia.', flags: MessageFlags.Ephemeral });
     }
+  }
+
+  async showTransferMenu(interaction, state) {
+    const members = [...state.channel.members.values()]
+      .filter((member) => !member.user.bot && member.id !== state.owner.id)
+      .slice(0, 25);
+
+    if (!members.length) {
+      await interaction.reply({ content: 'Belum ada member lain di voice room untuk menerima ownership.', flags: MessageFlags.Ephemeral });
+      return;
+    }
+
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId(`tv_transfer_select:${state.channel.id}`)
+      .setPlaceholder('Pilih owner baru dari member di voice room')
+      .addOptions(members.map((member) => ({
+        label: member.displayName.slice(0, 100),
+        description: `@${member.user.username}`.slice(0, 100),
+        value: member.id,
+      })));
+
+    await interaction.reply({
+      content: 'Pilih member yang sedang berada di voice room ini untuk menjadi owner baru:',
+      components: [new ActionRowBuilder().addComponents(menu)],
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  async handleTransferSelect(interaction, state) {
+    if (interaction.user.id !== state.owner.id) {
+      await interaction.reply({ content: 'Hanya owner saat ini yang dapat mentransfer room.', flags: MessageFlags.Ephemeral });
+      return;
+    }
+
+    const targetMember = state.channel.members.get(interaction.values[0]);
+    if (!targetMember || targetMember.user.bot) {
+      await interaction.update({ content: 'Member tersebut sudah tidak berada di voice room. Buka dropdown lagi untuk memilih ulang.', components: [] });
+      return;
+    }
+
+    const previousOwner = state.owner;
+    await state.channel.permissionOverwrites.delete(previousOwner).catch(() => {});
+    await state.channel.permissionOverwrites.edit(targetMember, {
+      ViewChannel: true,
+      Connect: true,
+      ManageChannels: true,
+      MoveMembers: true,
+      MuteMembers: true,
+      DeafenMembers: true,
+    });
+    state.owner = targetMember;
+    await this.refreshPanel(state);
+    await interaction.update({ content: `Ownership room berhasil dialihkan ke ${targetMember}.`, components: [] });
   }
 
   // ── Button Actions ────────────────────────────────────────────────────────
@@ -530,7 +574,7 @@ export class TempVoiceController {
 
   // ── Modal Submit Dispatcher ───────────────────────────────────────────────
 
-  async handleModal(interaction, state) {
+  async handleModal(interaction, state, manager) {
     const member = interaction.member;
     if (member.id !== state.owner.id) {
       await interaction.reply({ content: '⛔ Hanya owner yang bisa mengubah pengaturan.', flags: MessageFlags.Ephemeral });
@@ -541,6 +585,7 @@ export class TempVoiceController {
       case TV_MODAL_IDS.RENAME: {
         const newName = interaction.fields.getTextInputValue('room_name').trim();
         await state.channel.setName(newName);
+        manager?.saveOwnerChannelName(interaction.guildId, member.id, newName);
         await this.refreshPanel(state);
         await interaction.reply({ content: `✅ Nama room berhasil diubah menjadi: **${newName}**`, flags: MessageFlags.Ephemeral });
         break;
@@ -651,19 +696,6 @@ export class TempVoiceController {
         }
         await state.channel.permissionOverwrites.delete(targetMember);
         await interaction.reply({ content: `🔓 Blokir terhadap ${targetMember} telah dibuka.`, flags: MessageFlags.Ephemeral });
-        break;
-      }
-
-      case TV_MODAL_IDS.TRANSFER: {
-        const targetInput = interaction.fields.getTextInputValue('target_user').trim();
-        const targetMember = await this.resolveMember(interaction.guild, targetInput);
-        if (!targetMember) {
-          await interaction.reply({ content: '❌ User tidak ditemukan.', flags: MessageFlags.Ephemeral });
-          return;
-        }
-        state.owner = targetMember;
-        await this.refreshPanel(state);
-        await interaction.reply({ content: `👑 Kepemilikan room berhasil dialihkan ke ${targetMember}!` });
         break;
       }
 

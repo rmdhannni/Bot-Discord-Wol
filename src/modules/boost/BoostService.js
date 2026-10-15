@@ -60,7 +60,7 @@ export class BoostService {
         currentTierLabel,
         options: {
           theme: settings.boost.theme || 'dark',
-          titleHeader: memberName,
+          titleHeader: settings.boost.titleHeader || '{username}',
           subtitle: settings.boost.subtitle || 'THANKS FOR BOOSTING!',
           backgroundImageUrl: settings.boost.backgroundImageUrl || '',
         },

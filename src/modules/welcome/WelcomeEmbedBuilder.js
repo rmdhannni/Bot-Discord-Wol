@@ -4,6 +4,8 @@ import {
   SeparatorBuilder,
   SectionBuilder,
   ThumbnailBuilder,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
 } from 'discord.js';
 
 /**
@@ -31,7 +33,31 @@ export class WelcomeEmbedBuilder {
   buildWelcomeEmbed(member, options) { return this.buildWelcomeContainer(member, options); }
   buildGoodbyeEmbed(member, options) { return this.buildGoodbyeContainer(member, options); }
 
+  getImageUrl(value) {
+    if (typeof value !== 'string' || !value.trim()) return null;
+    try {
+      const url = new URL(value.trim());
+      if (!['http:', 'https:'].includes(url.protocol) || url.toString().length > 2048) return null;
+      return url.toString();
+    } catch {
+      return null;
+    }
+  }
+
+  buildImageGallery(imageUrl, description) {
+    const url = this.getImageUrl(imageUrl);
+    if (!url) return null;
+    return new MediaGalleryBuilder().addItems(
+      new MediaGalleryItemBuilder().setURL(url).setDescription(description),
+    );
+  }
+
   buildContainer(member, options, type) {
+    if ((Array.isArray(options?.layout) && options.layout.length)
+      || (typeof options?.layout === 'string' && options.layout.trim())) {
+      return this.buildLayoutContainer(member, options, type);
+    }
+
     const map = this.buildPlaceholderMap(member);
 
     const defaultTitle = type === 'welcome'
@@ -40,11 +66,13 @@ export class WelcomeEmbedBuilder {
     const defaultDesc = type === 'welcome'
       ? 'Hey {user}, welcome aboard! You are member **#{count}**.\nEnjoy your stay and read the rules.'
       : '**{user}** has left the server. We now have **{count}** members.';
-    // const defaultFooter = type === 'welcome' ? 'User ID: {userId}' : 'They will be missed.';
+    const defaultFooter = type === 'welcome'
+      ? 'User ID: {userId}'
+      : 'They will be missed.';
 
     const rawTitle = options?.title || defaultTitle;
     const rawDesc = options?.description || defaultDesc;
-    const rawFooter = options?.footer || defaultFooter;
+    const rawFooter = options?.footer ?? defaultFooter;
     const imageUrl = options?.imageUrl || '';
 
     const titleResolved = this.resolve(rawTitle, map);
@@ -56,32 +84,140 @@ export class WelcomeEmbedBuilder {
       ?? member?.displayAvatarURL?.({ extension: 'png', size: 256 })
       ?? 'https://cdn.discordapp.com/embed/avatars/0.png';
 
-    const userMention = typeof member?.toString === 'function' ? member.toString() : '';
-
     // Body teks utama
-    let bodyText = type === 'welcome'
-      ? `${userMention ? userMention + '\n' : ''}## ${titleResolved}\n\n${descResolved}`
-      : `## ${titleResolved}\n\n${descResolved}`;
+    let bodyText = `## ${titleResolved}\n\n${descResolved}`;
 
-    if (imageUrl && imageUrl.trim().startsWith('http')) {
-      bodyText += `\n[​](${imageUrl.trim()})`;
-    }
+    const bodyParts = bodyText.split('{separator}').slice(0, 4);
 
     // Section dengan avatar thumbnail di kanan
     const section = new SectionBuilder()
       .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(bodyText),
+        new TextDisplayBuilder().setContent(bodyParts[0] || ''),
       )
       .setThumbnailAccessory(
         new ThumbnailBuilder().setURL(avatarUrl),
       );
 
     const container = new ContainerBuilder()
-      .addSectionComponents(section)
-      .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
-      .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`-# ${footerResolved}`),
-      );
+      .setAccentColor(
+        Number.parseInt(
+          (/^#[0-9a-fA-F]{6}$/.test(options?.color || '')
+            ? options.color
+            : type === 'welcome' ? '#5865F2' : '#ED4245').slice(1),
+          16,
+        ),
+      )
+      .addSectionComponents(section);
+
+    for (const part of bodyParts.slice(1)) {
+      container.addSeparatorComponents(new SeparatorBuilder().setDivider(true));
+      if (part.trim()) {
+        container.addTextDisplayComponents(new TextDisplayBuilder().setContent(part.trim()));
+      }
+    }
+
+    if (footerResolved.trim()) {
+      container
+        .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(`-# ${footerResolved}`),
+        );
+    }
+
+    const imageGallery = this.buildImageGallery(imageUrl, `${type} banner`);
+    if (imageGallery) container.addMediaGalleryComponents(imageGallery);
+
+    return container;
+  }
+
+  parseLayout(layout) {
+    const blocks = [];
+    let currentBlock = null;
+
+    for (const rawLine of String(layout || '').split(/\r?\n/)) {
+      const line = rawLine.trimEnd();
+      const trimmed = line.trim();
+      if (!trimmed) {
+        if (currentBlock && currentBlock.type !== 'separator') currentBlock.content += '\n';
+        continue;
+      }
+
+      if (/^SEPARATOR$/i.test(trimmed)) {
+        blocks.push({ type: 'separator' });
+        currentBlock = null;
+        continue;
+      }
+
+      const directive = trimmed.match(/^(HEADER|TEXT|FOOTER)\s*:\s*(.*)$/i);
+      if (directive) {
+        currentBlock = { type: directive[1].toLowerCase(), content: directive[2] };
+        blocks.push(currentBlock);
+        continue;
+      }
+
+      if (currentBlock && currentBlock.type !== 'separator') {
+        currentBlock.content += `${currentBlock.content ? '\n' : ''}${line}`;
+      } else {
+        currentBlock = { type: 'text', content: trimmed };
+        blocks.push(currentBlock);
+      }
+    }
+
+    const expanded = [];
+    for (const block of blocks) {
+      if (block.type === 'separator') {
+        expanded.push(block);
+        continue;
+      }
+
+      const parts = block.content.split('{separator}');
+      parts.forEach((part, index) => {
+        if (part.trim()) expanded.push({ type: block.type, content: part.trim() });
+        if (index < parts.length - 1) expanded.push({ type: 'separator' });
+      });
+    }
+    return expanded;
+  }
+
+  buildLayoutContainer(member, options, type) {
+    const map = this.buildPlaceholderMap(member);
+    const blocks = Array.isArray(options.layout)
+      ? options.layout
+      : this.parseLayout(options.layout);
+    const avatarUrl = member?.user?.displayAvatarURL?.({ extension: 'png', size: 256 })
+      ?? member?.displayAvatarURL?.({ extension: 'png', size: 256 })
+      ?? 'https://cdn.discordapp.com/embed/avatars/0.png';
+    const color = /^#[0-9a-fA-F]{6}$/.test(options.color || '')
+      ? options.color
+      : type === 'welcome' ? '#5865F2' : '#ED4245';
+    const container = new ContainerBuilder().setAccentColor(Number.parseInt(color.slice(1), 16));
+    let avatarAttached = false;
+
+    for (const block of blocks) {
+      if (block.type === 'separator') {
+        container.addSeparatorComponents(new SeparatorBuilder().setDivider(true));
+        continue;
+      }
+
+      const resolved = this.resolve(block.content, map);
+      const content = block.type === 'header'
+        ? `## ${resolved}`
+        : block.type === 'footer' ? `-# ${resolved}` : resolved;
+      const textDisplay = new TextDisplayBuilder().setContent(content);
+
+      if (!avatarAttached) {
+        const section = new SectionBuilder()
+          .addTextDisplayComponents(textDisplay)
+          .setThumbnailAccessory(new ThumbnailBuilder().setURL(avatarUrl));
+        container.addSectionComponents(section);
+        avatarAttached = true;
+      } else {
+        container.addTextDisplayComponents(textDisplay);
+      }
+    }
+
+    const imageGallery = this.buildImageGallery(options.imageUrl, `${type} banner`);
+    if (imageGallery) container.addMediaGalleryComponents(imageGallery);
 
     return container;
   }
